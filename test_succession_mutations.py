@@ -113,7 +113,7 @@ class FisherGeometricModel() :
         if nb_mut > 0: 
             indices = np.random.randint(0, len(list_genes), nb_mut) # randomly choose the genes to mutate
             mutations = np.random.normal(0, self.sigma_mut, (nb_mut, self.dimension)) # Tenaillon 2014, Blanquart 2014 ; draw the mutation from a normal distribution of variance sigma_mut**2
-            # devrait on faire nb_mut*self.sigma_mut ?
+            # devrait on faire nb_mut*self.sigma_mut (voir mutation_on_every_gene)?
             list_genes[indices] = list_genes[indices] + mutations # modify the corresponding genes by adding the mutation vector to them.
 
         return list_genes.tolist(), nb_mut > 0 # convert the list of genes back to a list (necessary because some operations use in the class only work on lists)
@@ -145,7 +145,9 @@ class FisherGeometricModel() :
         if nb_mut > 0 : 
             for i in range(nb_mut):
                 m = np.random.normal(0, np.sqrt(n)*self.sigma_mut, size=(n, self.dimension)) # draw the mutation from a normal distribution of variance n*sigma_mut**2 (variance of a sum of mutation)
-                # est ce qu'on ne devrait pas toujours tiré la mutation sur 1 gène dans (0, sigma_mut) car c'est plutôt la somme des mutations (le vecteur total de mutation) qui est tiré dans (0, sqrt(n)*sigm_mut) ???
+                # est ce qu'on ne devrait pas toujours tiré la mutation sur 1 gène dans (0, sigma_mut) car c'est plutôt la somme des mutations (le vecteur total de mutation) qui est tiré dans (0, sqrt(n)*sigm_mut) ???,
+                # le cout du nombre de gène vient ici seulement du fait qu'on tire une mutation de plus par gène ajouté à la liste, la loi de laquelle on les tire ne change pas si on tire 
+                # une mutation individuelle et pas la somme totale ?
                 list_genes = [list_genes[i] + m[i] for i in range(n)] # modify every genes in the list by adding the corresponding mutation. All genes do not mutate the same way
 
         return list_genes, nb_mut > 0
