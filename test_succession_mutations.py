@@ -28,6 +28,7 @@ class FisherGeometricModel() :
         self.init_pos = initial_position # initial phenotype/genotype = position in the space of the individual.
         self.genes = [self.create_random_first_gene(ratio)] # random first gene in the genotype studied, it must be at least neutral to be kept.
         # ratio = ratio between sigma_gene and sigma_mut (size of the first gene) == importance of duplication versus mutation
+
         # self.genes = [self.create_fixed_first_gene(ratio, "orthogonal")] # chose the direction/size of the first gene 
 
         self.final_pos = initial_position + np.sum(self.genes, axis=0) # the real phenotypic position of the individual is computed by adding the genes vectors to the initial position
@@ -112,6 +113,7 @@ class FisherGeometricModel() :
         if nb_mut > 0: 
             indices = np.random.randint(0, len(list_genes), nb_mut) # randomly choose the genes to mutate
             mutations = np.random.normal(0, self.sigma_mut, (nb_mut, self.dimension)) # Tenaillon 2014, Blanquart 2014 ; draw the mutation from a normal distribution of variance sigma_mut**2
+            # devrait on faire nb_mut*self.sigma_mut ?
             list_genes[indices] = list_genes[indices] + mutations # modify the corresponding genes by adding the mutation vector to them.
 
         return list_genes.tolist(), nb_mut > 0 # convert the list of genes back to a list (necessary because some operations use in the class only work on lists)
@@ -679,7 +681,7 @@ def main():
     deletion_rate = 10**(-4) # /gene/generation
     mutation = 0.7 # % (if mutation at 100 and the other at 0, same as standart FGM but with genes instead of mutations)
     ratio = 3 # ratio between sigma_gene and sigma_mut (size of the first gene) == importance of duplication versus mutation
-    # etrangement le nombre final de duplication est plus élevé avec ratio = 0.5 que avec 3 + plus de duplication au départ ??
+    # etrangement le nombre final de duplication est plus élevé avec ratio = 0.5 que avec 3 et plus de duplication au départ ??
 
     # Simulation
     fgm = FisherGeometricModel(n_traits, initial_position, population_size, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio)
