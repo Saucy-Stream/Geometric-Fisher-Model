@@ -145,6 +145,7 @@ class FisherGeometricModel() :
         if nb_mut > 0 : 
             for i in range(nb_mut):
                 m = np.random.normal(0, np.sqrt(n)*self.sigma_mut, size=(n, self.dimension)) # draw the mutation from a normal distribution of variance n*sigma_mut**2 (variance of a sum of mutation)
+                # est ce qu'on ne devrait pas toujours tiré la mutation sur 1 gène dans (0, sigma_mut) car c'est plutôt la somme des mutations (le vecteur total de mutation) qui est tiré dans (0, sqrt(n)*sigm_mut) ???
                 list_genes = [list_genes[i] + m[i] for i in range(n)] # modify every genes in the list by adding the corresponding mutation. All genes do not mutate the same way
 
         return list_genes, nb_mut > 0
