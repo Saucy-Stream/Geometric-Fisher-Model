@@ -29,7 +29,7 @@ class FisherGeometricModel() :
         if s <= 0 :
             p = 0
         else :
-            p = 1 - np.exp(-2*s) / (1 - np.exp(-2*self.N*s)) # Barrett 2006
+            p = (1 - np.exp(-2*s)) / (1 - np.exp(-2*self.N*s)) # Barrett 2006
         return p
 
     def evolve(self, time_step, sigma_mut, alpha, Q) :

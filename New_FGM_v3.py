@@ -358,7 +358,7 @@ class FisherGeometricModel() :
         if 100*np.abs(s) < 1/self.N : # |s| << 1/N : neutral mutation
             p = 1/self.N # p rapidly falls to zero when N becomes larger
         elif np.abs(s) < 1/(2*self.N) or s > 0 : # nearly neutral mutation
-            p = 1 - np.exp(-2*s) / (1 - np.exp(-2*self.N*s)) # Barrett 2006 (in a N=1 population, beneficial mutation are necessarly fixed)
+            p = (1 - np.exp(-2*s)) / (1 - np.exp(-2*self.N*s)) # Barrett 2006 (in a N=1 population, beneficial mutation are necessarly fixed)
         else : # deleterious mutation
             p = 0 # deleterious mutation do not fix
         return p

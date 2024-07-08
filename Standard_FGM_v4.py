@@ -42,7 +42,7 @@ class FisherGeometricModel() :
 
     def fixation_probability(self, s) :
         # p = 2*s # Haldane 1927 (only viable for very little s)
-        p = 1 - np.exp(-2*s) / (1 - np.exp(-2*self.N*s)) # Barrett 2006
+        p = (1 - np.exp(-2*s)) / (1 - np.exp(-2*self.N*s)) # Barrett 2006
         return p
         
     def fixation_probability_v2(self, ml, Ml) :
