@@ -57,3 +57,8 @@ Two major change in this code :
     but it is as if there were 3 times more iterations)
 
 This version is the more recent and is useful to really observe the succession of type of mutation. 
+
+- Maths :
+Written sheet with some graphs to represent mutation, duplication and deletion events + an equation about the size and orientation
+of a duplicated gene for it to be beneficial + interpretation of this equation on the last page + little reflexion on the cost of sqrt(n) 
+when adding a gene to the genotype. 
