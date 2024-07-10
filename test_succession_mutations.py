@@ -78,6 +78,7 @@ class FisherGeometricModel() :
         elif direction == "orthogonal" :
             gene = np.ones(self.dimension) * (-r * self.sigma_mut)
             gene[0] *= 0 # 0 si on part sur un axe (mettre toutes les valeurs à 0 sauf 1 dans init_pos). Dans ce cas le gène est délétère : il est supprimer et rien ne peut se faire de mieux ensuite.
+            # à voir ce qu'il se passerait si on autorisait pas la deletion du seul gène que l'individu possède.
             # si on utilise cette méthode sans partir sur un axe, le gène est quasiment bien aligné, dans ce cas c'est un peu comme parallele : bcp de duplication au début, mais ensuite mute un peu et supprime les gènes mauvais ?
             return gene 
         elif direction == "only_one_deleterious_direction" :
@@ -696,8 +697,9 @@ alpha = 1/2
 Q = 2
 mutation_rate = 10**(-6) # rate of mutation mu
 # La simulation actuelle à donc une echelle de temps en (Nu)**(-1) soit une mutation toute les 100 générations
-duplication_rate = 10**(-6) # /gene/generation
-deletion_rate = 10**(-6) # /gene/generation
+duplication_rate = 10**(-5) # /gene/generation
+deletion_rate = 10**(-5) # /gene/generation
+# ne pas hesitez à modifier les valeurs des taux, l'adaptation en dépend bcp
 ratio = 1.5 # ratio between sigma_gene and sigma_mut (size of the first gene) == importance of duplication versus mutation
 # etrangement le nombre final de duplication est plus élevé avec ratio = 0.5 que avec 3 et plus de duplication au départ ??
 
