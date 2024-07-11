@@ -29,7 +29,7 @@ class FisherGeometricModel() :
         self.genes = [self.create_random_first_gene(ratio)] # random first gene in the genotype studied, it must be at least neutral to be kept.
         # ratio = ratio between sigma_gene and sigma_mut (size of the first gene) == importance of duplication versus mutation
 
-        # self.genes = [self.create_fixed_first_gene(ratio, "orthogonal")] # chose the direction/size of the first gene 
+        # self.genes = [self.create_fixed_first_gene(ratio, "neutral")] # chose the direction/size of the first gene 
 
         self.final_pos = initial_position + np.sum(self.genes, axis=0) # the real phenotypic position of the individual is computed by adding the genes vectors to the initial position
         self.initial_fitness = self.fitness_function(self.final_pos) # Compute the fitness of the actual phenotype before any mutation happen
@@ -74,18 +74,96 @@ class FisherGeometricModel() :
     
     def create_fixed_first_gene(self, r, direction):
         if direction == "parallel" : 
-            return np.ones(self.dimension) * (-r * self.sigma_mut) # gene on the axe to the optimum (for the chosen init_pos) : in this case the gene is optimal for adaptation, the simulation only make duplication 
+            # return np.ones(self.dimension) * (-r * self.sigma_mut  / np.sqrt(self.dimension)) # gene on the axe to the optimum (dans le cas où la position choisi est à 45°) : in this case the gene is optimal for adaptation, the simulation only make duplication 
+            # attention dépend à nouveau bcp de la taille du premier gène. S'il est grand, ne fait que des duplications. Si il est petits, c'est assez aléatoire (il y a toujours pas mal de duplication au début mais pas tant que ça)
+            # Dans ce cas comme les mutations sont assez bénéfiques aussi comparé à la duplication elles se fixent aussi ce qui bouge le point de l'axe optimal 
+        
+            grad = self.fitness_gradient(self.init_pos)
+            # print(grad)
+            gene = np.random.normal(0, 1, self.dimension)  # Random direction
+
+            # Project the gene onto the axe of the gradient
+            grad_norm = np.linalg.norm(grad)
+            if grad_norm > 0:
+                grad_unit = grad / grad_norm
+                # print(grad_unit)
+                gene = np.dot(gene, grad_unit) * grad_unit
+
+            gene = gene / np.linalg.norm(gene)  # Normalize to unit length
+            # print(gene)
+            gene = gene * r * self.sigma_mut  # Scale to the desired length
+
+            new_pos = self.init_pos + gene
+            s = self.fitness_effect(self.fitness_function(self.init_pos), self.fitness_function(new_pos))
+            print(s)
+            
+            return gene 
+        
         elif direction == "orthogonal" :
-            gene = np.ones(self.dimension) * (-r * self.sigma_mut)
-            gene[0] *= 0 # 0 si on part sur un axe (mettre toutes les valeurs à 0 sauf 1 dans init_pos). Dans ce cas le gène est délétère : il est supprimer et rien ne peut se faire de mieux ensuite.
+            # gene = np.ones(self.dimension) * (-r * self.sigma_mut / np.sqrt(self.dimension))
+            # gene[0] *= 0 # 0 si on part sur un axe (mettre toutes les valeurs à 0 sauf 1 dans init_pos). Dans ce cas le gène est délétère : il est supprimer et rien ne peut se faire de mieux ensuite.
             # à voir ce qu'il se passerait si on autorisait pas la deletion du seul gène que l'individu possède.
             # si on utilise cette méthode sans partir sur un axe, le gène est quasiment bien aligné, dans ce cas c'est un peu comme parallele : bcp de duplication au début, mais ensuite mute un peu et supprime les gènes mauvais ?
+            
+            # methode 2 : ( modifier deux directions suffit ?)
+            # gene[0] -= r * self.sigma_mut / sqrt(2)
+            # gene[1] += r * self.sigma_mut / sqrt(2)
+
+            # methode 3 : calcul du gradient de f permettant de connaitre la direction de variation la plus forte de f = l'axe optimal
+            grad = self.fitness_gradient(self.init_pos)
+            # print(grad)
+            gene = np.random.normal(0, 1, self.dimension)  # Random direction
+
+            # Project the gene onto the space orthogonal to the gradient
+            grad_norm = np.linalg.norm(grad)
+            if grad_norm > 0:
+                grad_unit = grad / grad_norm
+                # print(grad_unit)
+                gene = gene - np.dot(gene, grad_unit) * grad_unit
+
+            gene = gene / np.linalg.norm(gene)  # Normalize to unit length
+            # print(gene)
+            gene = gene * r * self.sigma_mut  # Scale to the desired length
+
+            new_pos = self.init_pos + gene
+            s = self.fitness_effect(self.fitness_function(self.init_pos), self.fitness_function(new_pos))
+            print(s)
+            
             return gene 
+        
         elif direction == "only_one_deleterious_direction" :
-            gene = np.ones(self.dimension) * (-r * self.sigma_mut)
+            gene = np.ones(self.dimension) * (-r * self.sigma_mut / np.sqrt(self.dimension))
             gene[0] *= -1
             return gene # mute a little to correct direction, then makes a lot of duplication, then delete some genes (+mute and duplicate) == get ride of the bad genes, then mute a lot
-    
+        
+        elif direction == "neutral" : # deplace la position initial le long de l'isocline
+            grad = self.fitness_gradient(self.init_pos)
+            random_vect = np.random.normal(0, 1, self.dimension)  # Random direction
+
+            # Project the gene onto the space orthogonal to the gradient
+            grad_norm = np.linalg.norm(grad)
+            if grad_norm > 0:
+                grad_unit = grad / grad_norm
+                random_vect = random_vect - np.dot(random_vect, grad_unit) * grad_unit
+                orthogonal_unit = random_vect / np.linalg.norm(random_vect)
+            
+            z = r * self.sigma_mut
+            d = np.linalg.norm(self.init_pos)
+            triangle_surface = z/2 * np.sqrt(d**2 - z**2 / 4)
+            sinus_gamma = 2*triangle_surface/d**2
+            gamma = np.arcsin(sinus_gamma)
+            theta = (np.pi - gamma) / 2
+
+            gene = z*np.cos(theta)*grad_unit + z*np.sin(theta)*orthogonal_unit
+
+            new_pos = self.init_pos + gene
+            s = self.fitness_effect(self.fitness_function(self.init_pos), self.fitness_function(new_pos))
+            print(s)
+
+            return gene
+
+    def fitness_gradient(self, position):
+        return -self.Q * self.alpha * position * self.fitness_function(position)
 
     def mutation_on_one_gene(self, list_genes):
         """
@@ -682,7 +760,7 @@ class FisherGeometricModel() :
 
 # Parameters
 n_traits = 50  # Number of traits in the phenotype space n
-initial_position = np.ones(n_traits)*10/np.sqrt(n_traits) # Quand la position initiale est plus éloigné de l'origine, la pop à bcp moins de mal à s'améliorer (et les mutations sont plus grandes ?)
+initial_position = np.ones(n_traits)*5/np.sqrt(n_traits) # Quand la position initiale est plus éloigné de l'origine, la pop à bcp moins de mal à s'améliorer (et les mutations sont plus grandes ?)
 # problème : peut pas partir de très loin : si on augmente trop la position initial ça fait des divisions par 0 dans le log et plus rien ne marche
 
 # initial_position = np.zeros(n_traits)
@@ -695,10 +773,10 @@ sigma_mut = r/np.sqrt(n_traits) # Standard deviation of the mutation effect size
 population_size = 10**3 # Effective population size N
 alpha = 1/2
 Q = 2
-mutation_rate = 10**(-6) # rate of mutation mu
+mutation_rate = 10**(-4) # rate of mutation mu
 # La simulation actuelle à donc une echelle de temps en (Nu)**(-1) soit une mutation toute les 100 générations
-duplication_rate = 10**(-5) # /gene/generation
-deletion_rate = 10**(-5) # /gene/generation
+duplication_rate = 10**(-4) # /gene/generation
+deletion_rate = 10**(-4) # /gene/generation
 # ne pas hesitez à modifier les valeurs des taux, l'adaptation en dépend bcp
 ratio = 1.5 # ratio between sigma_gene and sigma_mut (size of the first gene) == importance of duplication versus mutation
 # etrangement le nombre final de duplication est plus élevé avec ratio = 0.5 que avec 3 et plus de duplication au départ ??
