@@ -760,15 +760,20 @@ class FisherGeometricModel() :
 
 # Parameters
 n_traits = 50  # Number of traits in the phenotype space n
-initial_position = np.ones(n_traits)*5/np.sqrt(n_traits) # Quand la position initiale est plus éloigné de l'origine, la pop à bcp moins de mal à s'améliorer (et les mutations sont plus grandes ?)
+# initial_position = np.ones(n_traits)*5/np.sqrt(n_traits) # Quand la position initiale est plus éloigné de l'origine, la pop à bcp moins de mal à s'améliorer (et les mutations sont plus grandes ?)
 # problème : peut pas partir de très loin : si on augmente trop la position initial ça fait des divisions par 0 dans le log et plus rien ne marche
 
 # initial_position = np.zeros(n_traits)
 # initial_position[0] = 25 # pour partir sur un axe
 
+initial_position = np.random.normal(0, 1, n_traits)
+initial_position /= np.linalg.norm(initial_position)
+initial_position *= 5
+
 n_generations = 5*10**5  # Number of generations to simulate (pas vraiment, voir commentaire sur Nu)
 r = 0.5 
-sigma_mut = r/np.sqrt(n_traits) # Standard deviation of the mutation effect size # Tenaillon 2014
+# sigma_mut = r/np.sqrt(n_traits) # Standard deviation of the mutation effect size # Tenaillon 2014
+sigma_mut = 0.0001 # énormement de duplication/deletion par rapport au nombre de mutation quand on baisse sigme (voir sigma=0.01)
 # here sigma is the same on every dimension
 population_size = 10**3 # Effective population size N
 alpha = 1/2
@@ -793,12 +798,15 @@ print(np.linalg.norm(fgm.memory[-1]))
 """# complexity of the phenotypic space
 list_n = [2, 5, 10, 20, 30, 50]
 results = {}
+counter = 0
 for n in list_n:
     initial_position = np.ones(n)*10/np.sqrt(n) 
     fgm = FisherGeometricModel(n, initial_position, population_size, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio)
     # fgm.evolve(n_generations)
     fgm.evolve_successive(n_generations)  
     results[n] = fgm.fitness
+    counter += 1
+    print(counter)
 
 plt.figure()
 for n, fitness in results.items():
@@ -814,7 +822,7 @@ plt.show()"""
 results = {}
 count = 0
 for i in range(100):
-    fgm = FisherGeometricModel(n_traits, initial_position, population_size, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio=np.random.uniform(0,10))
+    fgm = FisherGeometricModel(n_traits, initial_position, population_size, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio=np.random.uniform(0,10)) # ratio=np.random.uniform(0,10)
     # fgm.evolve(n_generations)  
     fgm.evolve_successive(n_generations)
     results[fgm.fitness[-1]] = len(fgm.genes)
@@ -839,18 +847,19 @@ plt.show()
 
 """# Change in init pos
 n_traits = 50
-list_init = [np.ones(n_traits)*0.5/np.sqrt(n_traits), 
-             np.ones(n_traits)*1/np.sqrt(n_traits), 
-             np.ones(n_traits)*5/np.sqrt(n_traits),
-             np.ones(n_traits)*10/np.sqrt(n_traits)]
+list_init_dist = [0.5, 1, 5, 10]
 results = {}
 count = 0
-for init_pos in list_init :
+for d in list_init_dist :
+    init_pos = np.ones(n_traits)*d/np.sqrt(n_traits)
+    # init_pos = np.random.normal(0, 1, n_traits)
+    # init_pos /= np.linalg.norm(init_pos)
+    # init_pos = init_pos*d 
     fgm = FisherGeometricModel(n_traits, init_pos, population_size, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio)
     # fgm.evolve(n_generations)
     fgm.evolve_successive(n_generations)
     d = np.linalg.norm(init_pos)
-    nb_mut = len(fgm.memory) - 2 # memory a les positions init et après le premeir gène donc il faut faire -2
+    nb_mut = len(fgm.memory) - 2 # memory a les positions init et après le premier gène donc il faut faire -2
     effects = np.asarray(fgm.effects)
     if len(effects[effects>0]) == 0 :
         mean_effect = 0
@@ -931,3 +940,6 @@ plt.ylabel('Fitness')
 plt.title('Evolution of Fitness Over Time with Different rearrangement rate')
 plt.legend()
 plt.show()"""
+
+# ajouter test avec différent ratio 
+# ajouter test avec différent sigma
