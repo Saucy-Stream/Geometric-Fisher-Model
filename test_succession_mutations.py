@@ -1,6 +1,23 @@
+'''
+Author : mdeleglise
+Date : 12/07/2024
+Email : matthieu.deleglise@insa-lyon.fr
+
+Genotypic Fisher Geometric Model of Adaptation, 
+Iterative version (Hopefully recursive one day ?)
+'''
+
+##########################  
+#### Import Libraries ####
+##########################
+
 import numpy as np
 import matplotlib.pyplot as plt
 import cProfile
+
+##############################
+#### Functions definition ####
+##############################
 
 class FisherGeometricModel() :
     def __init__(self, n, initial_position, size, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method) :
@@ -817,8 +834,10 @@ class FisherGeometricModel() :
         plt.show()
 
 
+####################
+#### Parameters ####
+####################
 
-# Parameters
 n_traits = 50  # Number of traits in the phenotype space n
 # initial_position = np.ones(n_traits)*5/np.sqrt(n_traits) # Quand la position initiale est plus éloigné de l'origine, la pop à bcp moins de mal à s'améliorer (et les mutations sont plus grandes ?)
 # problème : peut pas partir de très loin : si on augmente trop la position initial ça fait des divisions par 0 dans le log et plus rien ne marche
@@ -826,9 +845,10 @@ n_traits = 50  # Number of traits in the phenotype space n
 # initial_position = np.zeros(n_traits)
 # initial_position[0] = 25 # pour partir sur un axe
 
+d = 5 # Wanted initial distance to the optimum
 initial_position = np.random.normal(0, 1, n_traits)
 initial_position /= np.linalg.norm(initial_position)
-initial_position *= 5
+initial_position *= d
 
 n_generations = 5*10**5  # Number of generations to simulate (pas vraiment, voir commentaire sur Nu)
 r = 0.5 
