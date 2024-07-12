@@ -29,7 +29,7 @@ class FisherGeometricModel() :
         self.genes = [self.create_random_first_gene(ratio)] # random first gene in the genotype studied, it must be at least neutral to be kept.
         # ratio = ratio between sigma_gene and sigma_mut (size of the first gene) == importance of duplication versus mutation
 
-        # self.genes = [self.create_fixed_first_gene(ratio, "neutral")] # chose the direction/size of the first gene 
+        # self.genes = [self.create_fixed_first_gene(ratio, "orthogonal")] # chose the direction/size of the first gene 
 
         self.final_pos = initial_position + np.sum(self.genes, axis=0) # the real phenotypic position of the individual is computed by adding the genes vectors to the initial position
         self.initial_fitness = self.fitness_function(self.final_pos) # Compute the fitness of the actual phenotype before any mutation happen
@@ -773,27 +773,27 @@ initial_position *= 5
 n_generations = 5*10**5  # Number of generations to simulate (pas vraiment, voir commentaire sur Nu)
 r = 0.5 
 # sigma_mut = r/np.sqrt(n_traits) # Standard deviation of the mutation effect size # Tenaillon 2014
-sigma_mut = 0.0001 # énormement de duplication/deletion par rapport au nombre de mutation quand on baisse sigme (voir sigma=0.01)
+sigma_mut = 0.001 # énormement de duplication/deletion par rapport au nombre de mutation quand on baisse sigma (voir sigma=0.01)
 # here sigma is the same on every dimension
 population_size = 10**3 # Effective population size N
 alpha = 1/2
 Q = 2
-mutation_rate = 10**(-4) # rate of mutation mu
+mutation_rate = 10**(-5) # rate of mutation mu
 # La simulation actuelle à donc une echelle de temps en (Nu)**(-1) soit une mutation toute les 100 générations
-duplication_rate = 10**(-4) # /gene/generation
-deletion_rate = 10**(-4) # /gene/generation
+duplication_rate = 10**(-5) # /gene/generation
+deletion_rate = 10**(-5) # /gene/generation
 # ne pas hesitez à modifier les valeurs des taux, l'adaptation en dépend bcp
-ratio = 1.5 # ratio between sigma_gene and sigma_mut (size of the first gene) == importance of duplication versus mutation
+ratio = 2 # ratio between sigma_gene and sigma_mut (size of the first gene) == importance of duplication versus mutation
 # etrangement le nombre final de duplication est plus élevé avec ratio = 0.5 que avec 3 et plus de duplication au départ ??
 
 # Simulation
-fgm = FisherGeometricModel(n_traits, initial_position, population_size, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio)
+"""fgm = FisherGeometricModel(n_traits, initial_position, population_size, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio)
 fgm.evolve_successive(n_generations)
 print(fgm.methods) # It seems like the closer we are to the optimum, the lesser there are dupl and del. (and even mutation)
 fgm.ploting_results(fgm.fitness, fgm.effects, n_generations)
 fgm.ploting_path(fgm.memory)
 fgm.ploting_size(fgm.nb_genes) # le nombre de gènes augmentent très vite au début (les duplciations sont fréquentes) puis ce stabilise jusqu'à la fin
-print(np.linalg.norm(fgm.memory[-1]))
+print(np.linalg.norm(fgm.memory[-1]))"""
 
 """# complexity of the phenotypic space
 list_n = [2, 5, 10, 20, 30, 50]
@@ -941,5 +941,66 @@ plt.title('Evolution of Fitness Over Time with Different rearrangement rate')
 plt.legend()
 plt.show()"""
 
-# ajouter test avec différent ratio 
-# ajouter test avec différent sigma
+"""# test avec différent ratio 
+list_ratio = [0.5, 1, 1.5, 2, 3, 5]
+results = {}
+count = 0
+for prop in list_ratio :
+    fgm = FisherGeometricModel(n_traits, initial_position, population_size, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, prop)
+    # fgm.evolve(n_generations)
+    fgm.evolve_successive(n_generations)
+    results[prop] = (fgm.fitness, fgm.nb_genes)
+    count += 1
+    print(count)
+
+plt.figure()
+for prop, val in results.items():
+    plt.plot(val[0], label=f'ratio = {prop}')
+
+plt.xlabel('Time')
+plt.ylabel('Fitness')
+plt.title('Evolution of Fitness Over Time with Different ratio between gene and mutation sizes')
+plt.legend()
+plt.show()
+
+plt.figure()
+for prop, val in results.items():
+    plt.plot(val[1], label=f'ratio = {prop}')
+
+plt.xlabel('Time')
+plt.ylabel('Number of Genes')
+plt.title('Evolution of the number of genes Over Time with Different ratio between gene and mutation sizes')
+plt.legend()
+plt.show()"""
+
+# test avec différent sigma
+list_sigma = [0.5, 0.1, 0.01, 0.001, 0.0001]
+results = {}
+count = 0
+for sig in list_sigma :
+    fgm = FisherGeometricModel(n_traits, initial_position, population_size, alpha, Q, sig, duplication_rate, deletion_rate, mutation_rate, ratio)
+    # fgm.evolve(n_generations)
+    fgm.evolve_successive(n_generations)
+    results[sig] = (fgm.fitness, fgm.nb_genes)
+    count += 1
+    print(count)
+
+plt.figure()
+for sig, val in results.items():
+    plt.plot(val[0], label=f'sigma = {sig}')
+
+plt.xlabel('Time')
+plt.ylabel('Fitness')
+plt.title('Evolution of Fitness Over Time with Different mutation standard deviation')
+plt.legend()
+plt.show()
+
+plt.figure()
+for sig, val in results.items():
+    plt.plot(val[1], label=f'sigma = {sig}')
+
+plt.xlabel('Time')
+plt.ylabel('Number of Genes')
+plt.title('Evolution of the number of genes Over Time with Different  mutation standard deviation')
+plt.legend()
+plt.show()
