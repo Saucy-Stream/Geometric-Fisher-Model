@@ -557,13 +557,13 @@ deletion_rate = 10**(-4) # /gene/generation
 mutation = 0.7 # % (if mutation at 100 and the other at 0, same as standart FGM but with genes instead of mutations)
 ratio = 1 # ratio between sigma_gene and sigma_mut (size of the first gene) == importance of duplication versus mutation
 
-"""# Simulation
+# Simulation
 fgm = FisherGeometricModel(n_traits, initial_position, population_size, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio)
 memory, fitness, effects, methods, nb_genes = fgm.evolve(n_generations)
 fgm.ploting_results(fitness, effects, n_generations)
 fgm.ploting_path(memory)
 fgm.ploting_size(nb_genes) # le nombre de gènes augmentent très vite au début (les duplciations sont fréquentes) puis ce stabilise jusqu'à la fin
-print(methods) # It seems like the closer we are to the optimum, the lesser there are dupl and del. (and even mutation)"""
+print(methods) # It seems like the closer we are to the optimum, the lesser there are dupl and del. (and even mutation)
 
 # cProfile.run('main()', sort="tottime") # 15 sec --> 20 sec (ajout)
 
@@ -613,7 +613,7 @@ print(results)'''
 # The more the genes are duplicated, the more the final fitness is far from optimum (fopt=1)
 
 
-# Change in init pos
+"""# Change in init pos
 n_traits = 50
 list_init = [np.ones(n_traits)*0.5/np.sqrt(n_traits), 
              np.ones(n_traits)*1/np.sqrt(n_traits), 
@@ -665,7 +665,7 @@ plt.ylabel('Mean effect of beneficial mutation')
 plt.title('Mean effect of beneficial mutation depending on the initial positions')
 plt.show()
 # Nice but seems like the effect diminish when d=10 : when to far away its a problem to ? 
-# not a problem when we take mutation on one gene only --> the graph is nice
+# not a problem when we take mutation on one gene only --> the graph is nice"""
 
 """# Role of mutation rate
 initial_position = np.ones(n_traits)*5/np.sqrt(n_traits) 
