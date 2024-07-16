@@ -13,7 +13,7 @@ Iterative version (Hopefully recursive one day ?)
 
 import numpy as np
 import matplotlib.pyplot as plt
-import cProfile
+import itertools
 
 ##############################
 #### Functions definition ####
@@ -60,9 +60,12 @@ class FisherGeometricModel() :
 
         self.memory = [self.init_pos, self.final_pos] # memorize the to first position, which are the initial phenotype of the individual and its phenotype after addition of the first gene
         self.fitness = [] # list that will memorize the fitness values of the phenotype at each iteration
-        self.effects = [] # list that will memorize the effects values of the change in phenotype/genotype at each iteration
+        self.effects = {"duplication" : {"beneficial" : {}, "neutral_deleterious" : {}}, 
+                        "deletion" : {"beneficial" : {}, "neutral_deleterious" : {}}, 
+                        "mutation" : {"beneficial" : {}, "neutral_deleterious" : {}}} # lists that will memorize the effects values of the change in phenotype/genotype at each iteration depending on the method of modification. Also memorize the distance to the optimum and the number of genes before this modification happened 
         self.methods = [] # # list that will memorize the method use to modificate the genotype at each iteration
         self.nb_genes = [1] # at the beginning, the individual only has one gene in the genome
+        self.counter = {"duplication" : 0, "deletion" : 0, "mutation" : 0}
 
     def create_random_first_gene(self, r):
         """
@@ -797,6 +800,10 @@ class FisherGeometricModel() :
         s = self.fitness_effect(self.initial_fitness, new_fitness) # the fitness effect of the modification
         pf = self.fixation_probability(s) # its fixation probality depending on its fitness effect
 
+        tmp_dist = np.linalg.norm(self.final_pos) # memorize the distance from the optimum before the genome modification
+        tmp_dist = np.round(tmp_dist, 2) # round it to two decimals so that it will be easier to memorize the effects depending on the distance
+        tmp_nb = len(self.genes) # memorize the number of genes in the list before the genome modification
+
         if np.random.rand() < pf : # the mutation is fixed
             self.genes = list_genes # actualize the genome
             self.final_pos = new_final_pos # and the phenotype
@@ -808,8 +815,21 @@ class FisherGeometricModel() :
         else : # if the modification didn't fixed 
             self.fitness.append(self.initial_fitness)
 
-        self.effects.append(s)
         self.nb_genes.append(len(self.genes)) # remember the number of genes in the genotype after this iteration
+        self.counter[method] += 1
+        
+        if s > 0 :
+            eff = "beneficial"
+        else :
+            eff = "neutral_deleterious"
+        
+        if tmp_dist in self.effects[method][eff].keys():
+            if tmp_nb in self.effects[method][eff][tmp_dist].keys():
+                self.effects[method][eff][tmp_dist][tmp_nb].append(s)
+            else :
+                self.effects[method][eff][tmp_dist][tmp_nb] = [s]
+        else :
+            self.effects[method][eff][tmp_dist] = {tmp_nb : [s]}
 
     def ploting_results(self, fitness, effects, time):
         """
@@ -956,14 +976,14 @@ deletion_rate = 10**(-5) # /gene/generation
 ratio = 5 # ratio between sigma_gene and sigma_mut (size of the first gene) == importance of duplication versus mutation
 # etrangement le nombre final de duplication est plus élevé avec ratio = 0.5 que avec 3 et plus de duplication au départ ??
 
-# Simulation
+"""# Simulation
 fgm = FisherGeometricModel(n_traits, initial_position, population_size, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, "semi_neutral")
 fgm.evolve_successive(n_generations, "always_all_gene")
 print(fgm.methods) # It seems like the closer we are to the optimum, the lesser there are dupl and del. (and even mutation)
 fgm.ploting_results(fgm.fitness, fgm.effects, n_generations)
 fgm.ploting_path(fgm.memory)
 fgm.ploting_size(fgm.nb_genes) # le nombre de gènes augmentent très vite au début (les duplciations sont fréquentes) puis ce stabilise jusqu'à la fin
-print(np.linalg.norm(fgm.memory[-1]))
+print(np.linalg.norm(fgm.memory[-1]))"""
 
 """# complexity of the phenotypic space
 list_n = [2, 5, 10, 20, 30, 50]
@@ -1179,10 +1199,10 @@ plt.show()"""
 results = {"No_Rearrangement" : [], "Mut_all_genome" : [], "Mut_per_gene" : []}
 count = 0
 for i in range(50) :
-    # refaire avec des init_pos diff à chaque iteration :
-    # initial_position = np.random.normal(0, 1, n_traits)
-    # initial_position /= np.linalg.norm(initial_position)
-    # initial_position *= d
+    # refaire avec des init_pos diff à chaque iteration 
+    initial_position = np.random.normal(0, 1, n_traits)
+    initial_position /= np.linalg.norm(initial_position)
+    initial_position *= d
 
     fgm1 = FisherGeometricModel(n_traits, initial_position, population_size, alpha, Q, sigma_mut, 0, 0, mutation_rate, ratio, "semi_neutral") # Case with no rearrangement (Standard FGM)
     fgm1.evolve_successive(n_generations, "always_all_gene")
@@ -1215,4 +1235,32 @@ plt.ylabel('Fitness')
 plt.title('Evolution of Fitness Over Time with Different version of FGM')
 plt.legend()
 plt.show()"""
+
+# test proportion 
+results = {"beneficial_dupl" : [], "total_dupl" : []}
+count = 0
+dist = 2.45
+for i in range(100):
+    fgm = FisherGeometricModel(n_traits, initial_position, population_size, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, "semi_neutral") 
+    fgm.evolve_successive(n_generations, "always_all_gene")
+
+    nb_benef_dupl_at_fixed_dist = 0
+    if dist in fgm.effects["duplication"]["beneficial"].keys() :
+        list_study = list(fgm.effects["duplication"]["beneficial"][dist].values())
+        merged = list(itertools.chain.from_iterable(list_study))
+        nb_benef_dupl_at_fixed_dist = len(merged)
+        results["beneficial_dupl"].append(nb_benef_dupl_at_fixed_dist)
+
+    if dist in fgm.effects["duplication"]["neutral_deleterious"].keys() : 
+        list_not_study = list(fgm.effects["duplication"]["neutral_deleterious"][dist].values())
+        merged_bis = list(itertools.chain.from_iterable(list_not_study))
+        tot_nb_dupl_at_fixed_dist = nb_benef_dupl_at_fixed_dist + len(merged_bis)
+        results["total_dupl"].append(tot_nb_dupl_at_fixed_dist)
+
+    # tot_dupl = fgm.counter["duplication"]
+    count += 1 
+    print(count)
+
+proportion = np.sum(results["beneficial_dupl"])/np.sum(results["total_dupl"])
+print(f"The proportion of beneficial duplication at a distance {dist} from the optimum is of {proportion}")
 
