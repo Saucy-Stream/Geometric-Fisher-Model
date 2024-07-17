@@ -935,7 +935,7 @@ n_traits = 50  # Number of traits in the phenotype space n
 # initial_position = np.zeros(n_traits)
 # initial_position[0] = 25 # pour partir sur un axe
 
-d = 5 # Wanted initial distance to the optimum
+d = 20 # Wanted initial distance to the optimum
 initial_position = np.random.normal(0, 1, n_traits)
 initial_position /= np.linalg.norm(initial_position)
 initial_position *= d
