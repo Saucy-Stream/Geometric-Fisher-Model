@@ -971,7 +971,7 @@ if __name__ == "__main__" :
     initial_position /= np.linalg.norm(initial_position)
     initial_position *= d
 
-    n_generations = 5*10**5  # Number of generations to simulate (pas vraiment, voir commentaire sur Nu)
+    n_generations = 4*10**5  # Number of generations to simulate (pas vraiment, voir commentaire sur Nu)
     r = 0.5 
     # sigma_mut = r/np.sqrt(n_traits) # Standard deviation of the mutation effect size # Tenaillon 2014
     sigma_mut = 0.01 # énormement de duplication/deletion par rapport au nombre de mutation quand on baisse sigma (voir sigma=0.01)
@@ -1306,12 +1306,12 @@ if __name__ == "__main__" :
     high3 = [mean_fitness3[i] + ci3[i] for i in range(len(ci3))] 
 
     fig, ax = plt.subplots()
-    ax.plot(mean_fitness1, label=f'version = No rearrangement', color = 'b')
-    ax.fill_between(x, low1, high1, color='b', alpha=.1, label = "Confidence Intervals without rearrangement")
-    ax.plot(mean_fitness2, label=f'version = Mutation and Duplication', color = 'r')
-    ax.fill_between(x, low2, high2, color='r', alpha=.1, label = "Confidence Intervals with duplication")
-    ax.plot(mean_fitness3, label=f'version = Mutation and Duplication/Deletion', color = 'g')
-    ax.fill_between(x, low3, high3, color='g', alpha=.1, label = "Confidence Intervals with duplication/deletion")
+    ax.plot(mean_fitness1, label=f'version = No rearrangements (only Mutations)', color = 'b')
+    ax.fill_between(x, low1, high1, color='b', alpha=.1)
+    ax.plot(mean_fitness2, label=f'version = Mutations and Duplications', color = 'r')
+    ax.fill_between(x, low2, high2, color='r', alpha=.1)
+    ax.plot(mean_fitness3, label=f'version = Mutations and Duplications/Deletions', color = 'g')
+    ax.fill_between(x, low3, high3, color='g', alpha=.1)
     plt.xlabel('Time')
     plt.ylabel('Fitness')
     plt.title('Evomelution of Fitness Over Time with Different Version of FGM')
