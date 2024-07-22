@@ -1,10 +1,6 @@
 '''
-Author : mdeleglise
-Date : 12/07/2024
-Email : matthieu.deleglise@insa-lyon.fr
-
 Genotypic Fisher Geometric Model of Adaptation, 
-Iterative version (Hopefully recursive one day ?)
+Iterative version.
 '''
 
 ##########################  
@@ -13,6 +9,7 @@ Iterative version (Hopefully recursive one day ?)
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 import itertools
 from multiprocessing import Pool
 
@@ -369,11 +366,12 @@ class FisherGeometricModel() :
             Always put at true in this version because there is 1 mutation per generation (iteration)
 
         """
+        new_genes = list_genes.copy()
         n = len(list_genes)
         m = np.random.normal(0, self.sigma_mut, size=(n, self.dimension)) # draw the mutation from a normal distribution of variance n*sigma_mut**2 (variance of a sum of mutation)
-        list_genes = [list_genes[i] + m[i] for i in range(n)] # modify every genes in the list by adding the corresponding mutation. All genes do not mutate the same way
+        new_genes = [new_genes[i] + m[i] for i in range(n)] # modify every genes in the list by adding the corresponding mutation. All genes do not mutate the same way
         mut = True
-        return list_genes, mut
+        return new_genes, mut
     
     def duplication(self):
         """
@@ -1275,45 +1273,61 @@ if __name__ == "__main__" :
     # Run simulations in parallel
     n_simulations = 50
     seeds = np.random.randint(0, 2**31 - 1, 3*n_simulations)
+    list_n = [10, 50, 100]
     with Pool() as pool:
-        results1 = pool.starmap(run_simulation, [(seed, n_traits, initial_position, alpha, Q, sigma_mut, 0, 0, mutation_rate, ratio, "semi_neutral", "always_all_gene", n_generations) for seed in seeds[:50]])
-        results2 = pool.starmap(run_simulation, [(seed, n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, 0, mutation_rate, ratio, "semi_neutral", "always_all_gene", n_generations) for seed in seeds[50:100]])
-        results3 = pool.starmap(run_simulation, [(seed, n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, "semi_neutral", "always_all_gene", n_generations) for seed in seeds[100:]])
-
+        results1 = pool.starmap(run_simulation, [(seed, n_traits, initial_position, alpha, Q, sigma_mut, 0, 0, mutation_rate, ratio, "semi_neutral", "always_all_gene", n_generations) for seed in seeds[:50] for n in list_n])
+        results2 = pool.starmap(run_simulation, [(seed, n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, 0, mutation_rate, ratio, "semi_neutral", "always_all_gene", n_generations) for seed in seeds[50:100] for n in list_n])
+        results3 = pool.starmap(run_simulation, [(seed, n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, "semi_neutral", "always_all_gene", n_generations) for seed in seeds[100:] for n in list_n])
     
     """fitness1 = zip(*results1)
     fitness2 = zip(*results2)
     fitness3 = zip(*results3)"""
 
-    mean_fitness1 = mean_list(results1)
-    mean_fitness2 = mean_list(results2)
-    mean_fitness3 = mean_list(results3)
+    results = [results1, results2, results3]
+    mean_fitnesses = []
+    std_fitnesses  = []
+    for i in range(3):
+        for j in range(0,50*(len(list_n)-1)+1,50):
+            mean_fitnesses.append(mean_list(results[i][j:j+50]))
+            std_fitnesses.append(standard_deviation(results[i][j:j+50]))
 
-    std_fitness1 = standard_deviation(results1)
-    std_fitness2 = standard_deviation(results2)
-    std_fitness3 = standard_deviation(results3) 
+    """list_ci = []
+    for list_std in std_fitnesses :
+        list_ci.append([1.96*std/np.sqrt(n_simulations) for std in list_std])"""
 
-    ci1 = [1.96*std/np.sqrt(n_simulations) for std in std_fitness1]  # 50 valeurs par groupe 
-    ci2 = [1.96*std/np.sqrt(n_simulations) for std in std_fitness2]
-    ci3 = [1.96*std/np.sqrt(n_simulations) for std in std_fitness3]
+    list_lower = []
+    list_upper = []
+    for k in range(len(mean_fitnesses)):
+        ci = [1.96*std/np.sqrt(n_simulations) for std in std_fitnesses[k]]
+        list_lower.append([mean_fitnesses[k][i] - ci[i] for i in range(len(ci))])
+        list_upper.append([mean_fitnesses[k][i] + ci[i] for i in range(len(ci))])
 
-    x = np.arange(0, len(mean_fitness1), 1)
-    low1 = [mean_fitness1[i] - ci1[i] for i in range(len(ci1))] 
-    high1 = [mean_fitness1[i] + ci1[i] for i in range(len(ci1))] 
-    low2 = [mean_fitness2[i] - ci2[i] for i in range(len(ci2))] 
-    high2 = [mean_fitness2[i] + ci2[i] for i in range(len(ci2))] 
-    low3 = [mean_fitness3[i] - ci3[i] for i in range(len(ci3))] 
-    high3 = [mean_fitness3[i] + ci3[i] for i in range(len(ci3))] 
+    x = np.arange(0, len(mean_fitnesses[0]), 1)
 
     fig, ax = plt.subplots()
-    ax.plot(mean_fitness1, label=f'version = No rearrangements (only Mutations)', color = 'b')
-    ax.fill_between(x, low1, high1, color='b', alpha=.1)
-    ax.plot(mean_fitness2, label=f'version = Mutations and Duplications', color = 'r')
-    ax.fill_between(x, low2, high2, color='r', alpha=.1)
-    ax.plot(mean_fitness3, label=f'version = Mutations and Duplications/Deletions', color = 'g')
-    ax.fill_between(x, low3, high3, color='g', alpha=.1)
+    lines = ["-"]
+    colors = ["b", "r", "g"]
+    labels = ['No Rearrangements (only Mutations)', 'Mutations and Duplications', 'Mutations, Duplications and Deletions']
+    dimensions = ['10', '50', '100']
+    for k in range(len(mean_fitnesses)):
+        ax.plot(mean_fitnesses[k], label = labels[k//3], color = colors[k//3], ls = lines[k%3])
+        ax.fill_between(x, list_lower[k], list_upper[k], color = colors[k//3], alpha = .1)
+
+    # Create custom legend for colors and line styles
+    color_handles = [Line2D([0], [0], color=color, lw=2) for color in colors]
+    line_handles = [Line2D([0], [0], color='black', lw=2, linestyle=line) for line in lines]
+
+    color_labels = labels
+    line_labels = dimensions
+
+    legend1 = ax.legend(color_handles, color_labels, title="Evolution Type", loc='lower right', bbox_to_anchor=(1, 0.3))
+    legend2 = ax.legend(line_handles, line_labels, title="Dimension", loc='lower right', bbox_to_anchor=(1, 0))
+
+    ax.add_artist(legend1)
+
     plt.xlabel('Time')
     plt.ylabel('Fitness')
-    plt.title('Evomelution of Fitness Over Time with Different Version of FGM')
-    plt.legend()
+    plt.title('Evolution of Fitness Over Time with Different Version of FGM and Different Dimension')
     plt.show()
+
+    # recup nb de gène et position

@@ -366,11 +366,12 @@ class FisherGeometricModel() :
             Always put at true in this version because there is 1 mutation per generation (iteration)
 
         """
-        n = len(list_genes)
+        new_genes = list_genes.copy()
+        n = len(new_genes)
         m = np.random.normal(0, self.sigma_mut, size=(n, self.dimension)) # draw the mutation from a normal distribution of variance n*sigma_mut**2 (variance of a sum of mutation)
-        list_genes = [list_genes[i] + m[i] for i in range(n)] # modify every genes in the list by adding the corresponding mutation. All genes do not mutate the same way
+        new_genes = [new_genes[i] + m[i] for i in range(n)] # modify every genes in the list by adding the corresponding mutation. All genes do not mutate the same way
         mut = True
-        return list_genes, mut
+        return new_genes, mut
     
     def duplication(self):
         """
@@ -970,10 +971,12 @@ list_n = [2, 5, 10, 20, 30, 50]
 results = {}
 counter = 0
 for n in list_n:
-    initial_position = np.ones(n)*10/np.sqrt(n) 
-    fgm = FisherGeometricModel(n, initial_position, population_size, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio)
+    initial_position = np.random.normal(0, 1, n)
+    initial_position /= np.linalg.norm(initial_position)
+    initial_position *= d
+    fgm = FisherGeometricModel(n, initial_position, population_size, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, "semi_neutral")
     # fgm.evolve(n_generations)
-    fgm.evolve_successive(n_generations)  
+    fgm.evolve_successive(n_generations, "always_all_gene")  
     results[n] = fgm.fitness
     counter += 1
     print(counter)
