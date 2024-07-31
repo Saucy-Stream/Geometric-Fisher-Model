@@ -40,7 +40,7 @@ class FisherGeometricModel() :
         self.sigma_mut = sigma_mut # standart deviation of the mutational vector on each axis
 
         self.init_pos = initial_position # initial phenotype/genotype = position in the space of the individual.
-        if method == "random" : # the first gene depend on the chosen method to create it : random beneficial gene, or fixed gene of a given direction
+        if method == "random" :
             self.genes = [self.create_random_first_gene(ratio)] # random first gene in the genotype studied, it must be at least neutral to be kept.
         
         else : 
@@ -57,15 +57,12 @@ class FisherGeometricModel() :
 
         self.memory = [self.init_pos, self.final_pos] # memorize the to first position, which are the initial phenotype of the individual and its phenotype after addition of the first gene
         self.fitness = [] # list that will memorize the fitness values of the phenotype at each iteration
-        self.effects = [] # list that will memorize the effects values of the change in phenotype/genotype at each iteration
+        self.effects = {"duplication" : {"beneficial" : {}, "neutral_deleterious" : {}}, 
+                        "deletion" : {"beneficial" : {}, "neutral_deleterious" : {}}, 
+                        "mutation" : {"beneficial" : {}, "neutral_deleterious" : {}}} # lists that will memorize the effects values of the change in phenotype/genotype at each iteration depending on the method of modification. Also memorize the distance to the optimum and the number of genes before this modification happened 
         self.methods = [] # # list that will memorize the method use to modificate the genotype at each iteration
         self.nb_genes = [1] # at the beginning, the individual only has one gene in the genome
-        self.mean_size = [np.linalg.norm(self.genes[0])] # list that will memorize the mean size of the genes at each iteration
-        self.std_size = [0]
-
-        self.temp_fitness = [] # to memorize the list of fitness after 10**5 generations and resumes evolution at this step
-        self.temp_position = np.zeros(n) # to memorize the position after 10**5 generations and resumes evolution at this step
-        self.temp_genes = [] # to memorize the list of genes after 10**5 generations and resumes evolution at this step
+        self.counter = {"duplication" : 0, "deletion" : 0, "mutation" : 0}
 
     def create_random_first_gene(self, r):
         """
@@ -166,7 +163,7 @@ class FisherGeometricModel() :
 
             new_pos = self.init_pos + gene
             s = self.fitness_effect(self.fitness_function(self.init_pos), self.fitness_function(new_pos)) # compute its fitness effect (should be little deleterious)
-            # print(s)
+            print(s)
             # à voir ce qu'il se passerait si on autorisait pas la deletion du seul gène que l'individu possède.
             
             return gene 
@@ -193,7 +190,7 @@ class FisherGeometricModel() :
 
             new_pos = self.init_pos + gene
             s = self.fitness_effect(self.fitness_function(self.init_pos), self.fitness_function(new_pos)) # Compute the fitness effect (should be beneficial, but less than if it was optimal)
-            # print(s)
+            print(s)
 
             return gene # mute a little to correct direction, then makes a lot of duplication, then delete some genes (+mute and duplicate) == get ride of the bad genes, then mute a lot
         
@@ -222,7 +219,7 @@ class FisherGeometricModel() :
 
                 new_pos = self.init_pos + gene
                 s = self.fitness_effect(self.fitness_function(self.init_pos), self.fitness_function(new_pos)) # Compute its fitness effect (should be 0 or very near)
-            # print(s)
+            print(s)
 
             return gene
             # methode 2 : avec l'analyse mathématique sur les duplications benefiques : 
@@ -254,7 +251,7 @@ class FisherGeometricModel() :
 
                 new_pos = self.init_pos + gene
                 s = self.fitness_effect(self.fitness_function(self.init_pos), self.fitness_function(new_pos)) # Compute its fitness effect (should be positive but not very large (less than for parallel and only_one_deleterious))
-            # print(s)
+            print(s)
 
             return gene
 
@@ -676,7 +673,8 @@ class FisherGeometricModel() :
                 self.effects.append(0)
 
             self.nb_genes.append(len(self.genes)) # remember the number of genes in the genotype after this iteration
-
+                
+        # return self.memory, self.fitness, self.effects, self.methods, self.nb_genes
     
     def evolve_successive(self, time_step, case) : # 20 sec
         """
@@ -711,11 +709,6 @@ class FisherGeometricModel() :
         
         """
         for i in range(time_step):
-            if i == 10**5 : # after 100000 generations, memorize the position, fitness and genotype
-                self.temp_fitness = self.fitness.copy()
-                self.temp_position = self.final_pos.copy()
-                self.temp_genes = self.genes.copy()
-
             if np.random.rand() < 0.5 :
                 list_genes, dupl = self.duplication() # test if there are some duplications to do
                 
@@ -724,7 +717,6 @@ class FisherGeometricModel() :
                 else : 
                     self.fitness.append(self.initial_fitness)
                     self.nb_genes.append(len(self.genes))
-                    self.memory.append(self.final_pos)
 
                 list_genes, dele = self.deletion() # test if there are some deletions to do
 
@@ -733,7 +725,6 @@ class FisherGeometricModel() :
                 else : 
                     self.fitness.append(self.initial_fitness)
                     self.nb_genes.append(len(self.genes))
-                    self.memory.append(self.final_pos)
 
             else : 
                 list_genes, dele = self.deletion() # test if there are some deletions to do
@@ -743,7 +734,6 @@ class FisherGeometricModel() :
                 else : 
                     self.fitness.append(self.initial_fitness)
                     self.nb_genes.append(len(self.genes))
-                    self.memory.append(self.final_pos)
 
                 list_genes, dupl = self.duplication() # test if there are some duplications to do
                 
@@ -752,7 +742,6 @@ class FisherGeometricModel() :
                 else : 
                     self.fitness.append(self.initial_fitness)
                     self.nb_genes.append(len(self.genes))
-                    self.memory.append(self.final_pos)
             
             if len(self.genes) > 0 : # test if there are some mutations to do
                 if case == "one_gene" : 
@@ -767,11 +756,9 @@ class FisherGeometricModel() :
                 else : 
                     self.fitness.append(self.initial_fitness)
                     self.nb_genes.append(len(self.genes))
-                    self.memory.append(self.final_pos)
                      
-            sizes = [np.linalg.norm(gene) for gene in self.genes]
-            self.mean_size.append(np.mean(sizes))
-            self.std_size.append(np.std(sizes))
+            
+        # return memory, fitness, effects, methods, nb_genes
     
     def test_fixation(self, list_genes, method):
         """
@@ -797,6 +784,10 @@ class FisherGeometricModel() :
         s = self.fitness_effect(self.initial_fitness, new_fitness) # the fitness effect of the modification
         pf = self.fixation_probability(s) # its fixation probality depending on its fitness effect
 
+        tmp_dist = np.linalg.norm(self.final_pos) # memorize the distance from the optimum before the genome modification
+        tmp_dist = np.round(tmp_dist, 2) # round it to two decimals so that it will be easier to memorize the effects depending on the distance
+        tmp_nb = len(self.genes) # memorize the number of genes in the list before the genome modification
+
         if np.random.rand() < pf : # the mutation is fixed
             self.genes = list_genes # actualize the genome
             self.final_pos = new_final_pos # and the phenotype
@@ -807,63 +798,25 @@ class FisherGeometricModel() :
 
         else : # if the modification didn't fixed 
             self.fitness.append(self.initial_fitness)
-            self.memory.append(self.final_pos)
 
-        self.effects.append(s)
         self.nb_genes.append(len(self.genes)) # remember the number of genes in the genotype after this iteration
-
-    def historicity_test(self):
-        """
-        Resumes Evolution after the 10**5 generations to see if there are differences in
-        the evolutionnary path taken
-
-        ------
-        Parameters : 
-            All necessary parameters are self defined in the class object (see __init__) : 
-            fitness, genes and final_pos
+        self.counter[method] += 1
         
-        ------
-        Return : 
-            None 
-            Call for evolve_successive again, but with 10**5 less generations 
+        if s > 0 :
+            eff = "beneficial"
+        else :
+            eff = "neutral_deleterious"
         
-        """
-        self.fitness = self.temp_fitness
-        self.genes = self.temp_genes
-        self.final_pos = self.temp_position
-        self.initial_fitness = self.fitness_function(self.final_pos)
-        self.evolve_successive(3*10**5, "always_all_gene")
-
-    def plot_historic_fitness(self, fitness1, fitness2):
-        """
-        Plot the two evolutionnary path in terms of the evolution of fitness over time.
-        The second path is a resume of evolution at a previous distance and genotype 
-        of the first one. 
-        
-        ------
-        Parameters :
-            fitness1 : list
-            List of fitness taken after each mutational event
-            fitness2 : list
-            List of fitness taken after each mutational event for the second evolution
-            
-        ------
-        Return :
-            None
-            Plot the graphic
-
-        """
-        plt.figure()
-
-        plt.plot(fitness1, color="blue", label="first simulation")
-        plt.plot(fitness2, color="red", label="second simulation")
-        plt.xlabel('Mutational Event')
-        plt.ylabel('Fitness')
-        plt.legend()
-        plt.title('Evolution of Fitness Over Time ')
-
-        plt.show()
-
+        # effects is now an imbricated dictionnary where we memorize :
+        # the mutational method, its effect, the distance where it happend, 
+        # the number of genes there were at this moment, and finlaly, the fitness effect
+        if tmp_dist in self.effects[method][eff].keys():
+            if tmp_nb in self.effects[method][eff][tmp_dist].keys():
+                self.effects[method][eff][tmp_dist][tmp_nb].append(s)
+            else :
+                self.effects[method][eff][tmp_dist][tmp_nb] = [s]
+        else :
+            self.effects[method][eff][tmp_dist] = {tmp_nb : [s]}
 
     def ploting_results(self, fitness, effects, time):
         """
@@ -873,12 +826,12 @@ class FisherGeometricModel() :
         ------
         Parameters :
             fitness : list
-            List of the fitness (float) of the individual after each mutational event
+            List of the fitness (float) of the individual at each time_step
             effects : list
             List of the fitness effect (float) of the modification of the phenotype/genotype 
-            that happend at each mutational event.
+            that happend at each time step.
             time : int
-            Number of time step used in the simulation
+            Number of time_step used in the simulation
 
         ------
         Return
@@ -914,7 +867,7 @@ class FisherGeometricModel() :
         ------
         Parameters :
             memory : list
-            List of position (vectors) in the phenotypic space after each mutational event.
+            List of position (vectors) in the phenotypic space after each fixed mutations.
 
         ------
         Return
@@ -934,7 +887,7 @@ class FisherGeometricModel() :
 
         plt.show()
     
-    def ploting_size(self, nb_genes, mean_size, std_size):
+    def ploting_size(self, nb_genes):
         """
         Plot the evolution of the number of genes (due to duplication and deletion) 
         with respect to time.
@@ -942,11 +895,7 @@ class FisherGeometricModel() :
         ------
         Parameters :
             nb_genes : list
-            List of the number of genes in the genome of the individual at each mutational event (3 per time step)
-            mean_size : list
-            List of the mean size of genes in the genome of the individual at each iteration
-            std_size : list
-            List of the standard deviation of the size of genes in the genome of the individual at each iteration
+            List of the number of genes in the genome of the individual at each time step
 
         ------
         Return
@@ -954,26 +903,11 @@ class FisherGeometricModel() :
             (show the graph in an other window)
             
         """
-        ci = [1.96*std_size[k]/np.sqrt(nb_genes[k*3]) for k in range(len(std_size))]
-        list_lower = [mean_size[i] - ci[i] for i in range(len(ci))]
-        list_upper = [mean_size[i] + ci[i] for i in range(len(ci))]
-
-        x = np.arange(0, len(ci), 1) # abscisse for the confidence intervals to be plotted
-
         plt.figure()
-
-        plt.subplot(1, 2, 1)
         plt.plot(nb_genes)
-        plt.xlabel('Mutational Events')
+        plt.xlabel('Time')
         plt.ylabel('Number of genes in the genotype')
         plt.title('Evolution of the Number of genes with Time')
-
-        ax = plt.subplot(1, 2, 2)
-        ax.plot(mean_size)
-        ax.fill_between(x, list_lower, list_upper, alpha = .1)
-        plt.xlabel('Time')
-        plt.ylabel('Mean size of genes in the genotype')
-        plt.title('Evolution of the size of genes with Time')
 
         plt.show()
 
@@ -990,7 +924,6 @@ def mean_list(lists):
     Return : 
         mean_values : list
         List having at position i the mean of the values of index i in every lists
-
     """
     transposed_lists = list(zip(*lists)) # group the element of each list having the same index.
     # Calculate the mean for each group of elements
@@ -1016,146 +949,96 @@ def standard_deviation(lists):
     std_values = [np.std(group) for group in transposed_lists]
     return std_values # return the std list having at position i the std of the values of index i in every lists
 
+def run_simulation(seed, n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method, mutation_method, n_generations):
+    np.random.seed(seed)
+    fgm = FisherGeometricModel(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method)
+    fgm.evolve_successive(n_generations, mutation_method)
+    print('Done')
+    return fgm.fitness 
+
+def parallel_version_comparison(alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method, mutation_method, n_generations): 
+    # parallel computation of the comparison between version
+    # Run simulations in parallel
+    n_simulations = 50
+    seeds = np.random.randint(0, 2**31 - 1, 3*n_simulations)
+    list_n = [10, 50, 100]
+
+    list_init = []
+    for n in list_n :
+        initial_position = np.random.normal(0, 1, n)
+        initial_position /= np.linalg.norm(initial_position)
+        initial_position *= d
+        list_init.append(initial_position)
+
+    with Pool() as pool:
+        results1 = pool.starmap(run_simulation, [(seed, list_n[i], list_init[i], alpha, Q, sigma_mut, 0, 0, mutation_rate, ratio, "semi_neutral", "always_all_gene", n_generations) for seed in seeds[:50] for i in range(len(list_n))])
+        results2 = pool.starmap(run_simulation, [(seed, list_n[i], list_init[i], alpha, Q, sigma_mut, duplication_rate, 0, mutation_rate, ratio, "semi_neutral", "always_all_gene", n_generations) for seed in seeds[50:100] for i in range(len(list_n))])
+        results3 = pool.starmap(run_simulation, [(seed, list_n[i], list_init[i], alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, "semi_neutral", "always_all_gene", n_generations) for seed in seeds[100:] for i in range(len(list_n))])
+    
+    """fitness1 = zip(*results1)
+    fitness2 = zip(*results2)
+    fitness3 = zip(*results3)"""
+
+    results = [results1, results2, results3]
+    mean_fitnesses = []
+    std_fitnesses  = []
+    for i in range(3):
+        for j in range(0,50*(len(list_n)-1)+1,50):
+            mean_fitnesses.append(mean_list(results[i][j:j+50]))
+            std_fitnesses.append(standard_deviation(results[i][j:j+50]))
+
+    """list_ci = []
+    for list_std in std_fitnesses :
+        list_ci.append([1.96*std/np.sqrt(n_simulations) for std in list_std])"""
+
+    list_lower = []
+    list_upper = []
+    for k in range(len(mean_fitnesses)):
+        ci = [1.96*std/np.sqrt(n_simulations) for std in std_fitnesses[k]]
+        list_lower.append([mean_fitnesses[k][i] - ci[i] for i in range(len(ci))])
+        list_upper.append([mean_fitnesses[k][i] + ci[i] for i in range(len(ci))])
+
+    x = np.arange(0, len(mean_fitnesses[0]), 1)
+
+    fig, ax = plt.subplots()
+    lines = ["-"]
+    colors = ["b", "r", "g"]
+    labels = ['No Rearrangements (only Mutations)', 'Mutations and Duplications', 'Mutations, Duplications and Deletions']
+    dimensions = ['10', '50', '100']
+    for k in range(len(mean_fitnesses)):
+        ax.plot(mean_fitnesses[k], label = labels[k//3], color = colors[k//3], ls = lines[k%3])
+        ax.fill_between(x, list_lower[k], list_upper[k], color = colors[k//3], alpha = .1)
+
+    # Create custom legend for colors and line styles
+    color_handles = [Line2D([0], [0], color=color, lw=2) for color in colors]
+    line_handles = [Line2D([0], [0], color='black', lw=2, linestyle=line) for line in lines]
+
+    color_labels = labels
+    line_labels = dimensions
+
+    legend1 = ax.legend(color_handles, color_labels, title="Evolution Type", loc='lower right', bbox_to_anchor=(1, 0.3))
+    legend2 = ax.legend(line_handles, line_labels, title="Dimension", loc='lower right', bbox_to_anchor=(1, 0))
+
+    ax.add_artist(legend1)
+
+    plt.xlabel('Time')
+    plt.ylabel('Fitness')
+    plt.title('Evolution of Fitness Over Time with Different Version of FGM and Different Dimension')
+    plt.show()
+
+    # recup nb de gène et position
+
 def simulation(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method, mutation_method, n_generations):
-    """
-    Simulate the evolution of an individual thanks to the given parameters. 
-    Plot evolutionary path using the evolution of fitness, position and number of genes over times, 
-    but also the fitness effect of each mutational event, beneficial (or not).
-
-    ------
-    Parameters : 
-        n_traits : int
-        Number of phenotypic traits defining the dimension of the space
-        initial_position : np.array
-        One dimensional Numpy array of size n_traits representing the position of the initial phenotype of the individual
-        alpha : float
-        Robustness parameter in fitness function. Here, alpha always equals 1/2
-        Q : int
-        Epistasis parameter in fitness function. Here, Q always equals 2
-        sigma_mut : float
-        standard deviation of the mutation's distribution
-        duplication_rate : float
-        rate of duplication in terms of number of duplication per gene and generations
-        deletion_rate : float
-        rate of deletion in terms of number of deletion per gene and generations
-        mutation_rate : float
-        rate of mutation in terms of number of mutation par gene and generations
-        ratio : float
-        ratio between the standard deviation (size) of the first gene and the one of mutations
-        method : str
-        method used to create the first gene. Can be : random, parallel, orthogonal, semi_neutral, neutral, only_one_deleterious_direction
-        mutation_method : str
-        method used to make mutations at each generations : can be one_gene, all_gene, always_all_gene. The most used method here
-        is the last as we mutate each genes at each generations.
-        n_generations : int
-        number of time step to simulate in the evolution. 
-
-    ------
-    Return :
-        None
-        plot graphics : evolution of fitness over time / distance to the optimum over time / 
-        number of genes over time / fitness effect of mutational events
-        print the last distance to the optimum reached
-
-    """
     # Simulation
     fgm = FisherGeometricModel(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method)
     fgm.evolve_successive(n_generations, mutation_method)
     print(fgm.methods) # It seems like the closer we are to the optimum, the lesser there are dupl and del. (and even mutation)
     fgm.ploting_results(fgm.fitness, fgm.effects, n_generations)
     fgm.ploting_path(fgm.memory)
-    fgm.ploting_size(fgm.nb_genes, fgm.mean_size, fgm.std_size) # le nombre de gènes augmentent très vite au début (les duplciations sont fréquentes) puis ce stabilise jusqu'à la fin
+    fgm.ploting_size(fgm.nb_genes) # le nombre de gènes augmentent très vite au début (les duplciations sont fréquentes) puis ce stabilise jusqu'à la fin
     print(np.linalg.norm(fgm.memory[-1]))
 
-def historic_simulation(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method, mutation_method, n_generations):
-    """
-    Simulate the evolution of an individual thanks to the given parameters. 
-    Remember the position and genotype of the individual after 100000 generations. 
-    Resumes a new evolutionnary path at this position to see the possible 
-    differences of dynamic in GFGM when we begin at a previous point. 
-
-    ------
-    Parameters : 
-        n_traits : int
-        Number of phenotypic traits defining the dimension of the space
-        initial_position : np.array
-        One dimensional Numpy array of size n_traits representing the position of the initial phenotype of the individual
-        alpha : float
-        Robustness parameter in fitness function. Here, alpha always equals 1/2
-        Q : int
-        Epistasis parameter in fitness function. Here, Q always equals 2
-        sigma_mut : float
-        standard deviation of the mutation's distribution
-        duplication_rate : float
-        rate of duplication in terms of number of duplication per gene and generations
-        deletion_rate : float
-        rate of deletion in terms of number of deletion per gene and generations
-        mutation_rate : float
-        rate of mutation in terms of number of mutation par gene and generations
-        ratio : float
-        ratio between the standard deviation (size) of the first gene and the one of mutations
-        method : str
-        method used to create the first gene. Can be : random, parallel, orthogonal, semi_neutral, neutral, only_one_deleterious_direction
-        mutation_method : str
-        method used to make mutations at each generations : can be one_gene, all_gene, always_all_gene. The most used method here
-        is the last as we mutate each genes at each generations.
-        n_generations : int
-        number of time step to simulate in the evolution. 
-
-    ------
-    Return :
-        None
-        plot graphics : evolution of fitness over time for both path
-
-    """
-    # Simulation
-    fgm = FisherGeometricModel(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method)
-    fgm.evolve_successive(n_generations, mutation_method)
-    fitness1 = fgm.fitness.copy()
-    fgm.historicity_test()
-    fitness2 = fgm.fitness
-    fgm.plot_historic_fitness(fitness1, fitness2)
-
-
 def phenotypic_complexity(d, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method, mutation_method, n_generations, list_n):
-    """
-    Simulate the evoluton of an individual depending on the number of dimension of the phenotypic space.
-    Plot the evolution of fitness and number of genes over time for many dimensions
-
-    ------
-    Parameters : 
-        d : float
-        initial distance to the optimum of the phenotype of the individual
-        alpha : float
-        Robustness parameter in fitness function. Here, alpha always equals 1/2
-        Q : int
-        Epistasis parameter in fitness function. Here, Q always equals 2
-        sigma_mut : float
-        standard deviation of the mutation's distribution
-        duplication_rate : float
-        rate of duplication in terms of number of duplication per gene and generations
-        deletion_rate : float
-        rate of deletion in terms of number of deletion per gene and generations
-        mutation_rate : float
-        rate of mutation in terms of number of mutation par gene and generations
-        ratio : float
-        ratio between the standard deviation (size) of the first gene and the one of mutations
-        method : str
-        method used to create the first gene. Can be : random, parallel, orthogonal, semi_neutral, neutral, only_one_deleterious_direction
-        mutation_method : str
-        method used to make mutations at each generations : can be one_gene, all_gene, always_all_gene. The most used method here
-        is the last as we mutate each genes at each generations.
-        n_generations : int
-        number of time step to simulate in the evolution. 
-        list_n : list
-        list of the dimensions of the space in which we want to simulate evolution
-
-    ------
-    Return :
-        None
-        plot graphics : evolution of fitness over time / number of genes over time, for each dimension n.
-        
-    """
     # complexity of the phenotypic space
     results = {}
     counter = 0
@@ -1166,150 +1049,21 @@ def phenotypic_complexity(d, alpha, Q, sigma_mut, duplication_rate, deletion_rat
         fgm = FisherGeometricModel(n, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method)
         # fgm.evolve(n_generations)
         fgm.evolve_successive(n_generations, mutation_method)  
-        results[n] = (fgm.fitness, fgm.nb_genes)
+        results[n] = fgm.fitness
         counter += 1
         print("test realized: ", counter)
 
     plt.figure()
-    for n, val in results.items():
-        plt.plot(val[0], label=f'n_traits = {n}')
+    for n, fitness in results.items():
+        plt.plot(fitness, label=f'n_traits = {n}')
 
     plt.xlabel('Time')
     plt.ylabel('Fitness')
     plt.title('Evolution of Fitness Over Time with Different Numbers of Traits')
-    plt.legend()
-    plt.show()
-
-    plt.figure()
-    for n, val in results.items():
-        plt.plot(val[1], label=f'n_traits = {n}')
-
-    plt.xlabel('Time')
-    plt.ylabel('Number of Genes')
-    plt.title('Evolution of the Number of Genes Over Time with Different Numbers of Traits')
-    plt.legend()
-    plt.show()
-    
-def parallel_phenotypic_complexity(d, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method, mutation_method, n_generations, list_n):
-    """
-    Simulate the evoluton of an individual depending on the number of dimension of the phenotypic space.
-    Plot the evolution of fitness and number of genes over time for many dimensions
-
-    ------
-    Parameters : 
-        d : float
-        initial distance to the optimum of the phenotype of the individual
-        alpha : float
-        Robustness parameter in fitness function. Here, alpha always equals 1/2
-        Q : int
-        Epistasis parameter in fitness function. Here, Q always equals 2
-        sigma_mut : float
-        standard deviation of the mutation's distribution
-        duplication_rate : float
-        rate of duplication in terms of number of duplication per gene and generations
-        deletion_rate : float
-        rate of deletion in terms of number of deletion per gene and generations
-        mutation_rate : float
-        rate of mutation in terms of number of mutation par gene and generations
-        ratio : float
-        ratio between the standard deviation (size) of the first gene and the one of mutations
-        method : str
-        method used to create the first gene. Can be : random, parallel, orthogonal, semi_neutral, neutral, only_one_deleterious_direction
-        mutation_method : str
-        method used to make mutations at each generations : can be one_gene, all_gene, always_all_gene. The most used method here
-        is the last as we mutate each genes at each generations.
-        n_generations : int
-        number of time step to simulate in the evolution. 
-        list_n : list
-        list of the dimensions of the space in which we want to simulate evolution
-
-    ------
-    Return :
-        None
-        plot graphics : evolution of fitness over time / number of genes over time, for each dimension n.
-        
-    """
-    # complexity of the phenotypic space
-    n_simulations = 50
-    seeds = np.random.randint(0, 2**31 - 1, len(list_n)*n_simulations)
-
-    results = {}
-    counter = 0
-    with Pool() as pool :
-        for n in list_n:
-            initial_position = np.random.normal(0, 1, n)
-            initial_position /= np.linalg.norm(initial_position)
-            initial_position *= d
-
-            random_seed = seeds[np.random.randint(0, len(seeds), n_simulations)]
-            result = pool.starmap(run_simulation, [(seed, n, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method, mutation_method, n_generations) for seed in random_seed])
-
-            fitness, nb_genes = [result[i][0] for i in range(len(result))], [result[i][1] for i in range(len(result))] # result[i][2] == position pas utile ici
-            mean_fitness, mean_nb_genes = mean_list(fitness), mean_list(nb_genes)
-            results[n] = (mean_fitness, mean_nb_genes)
-            counter += 1
-            print("test realized: ", counter)
-
-    plt.figure()
-    for n, val in results.items():
-        plt.plot(val[0], label=f'n_traits = {n}')
-
-    plt.xlabel('Time')
-    plt.ylabel('Fitness')
-    plt.title('Evolution of Fitness Over Time with Different Numbers of Traits')
-    plt.legend()
-    plt.show()
-
-    plt.figure()
-    for n, val in results.items():
-        plt.plot(val[1], label=f'n_traits = {n}')
-
-    plt.xlabel('Time')
-    plt.ylabel('Number of Genes')
-    plt.title('Evolution of the Number of Genes Over Time with Different Numbers of Traits')
     plt.legend()
     plt.show()
 
 def genotypic_complexity(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, method, mutation_method, n_generations):
-    """
-    Simulate 100 different evolution and plot the final fitness depending on the final 
-    number of genes in the phenotypes to show the cost of the genotypic complexity.
-    See "parallel_faster_complexity_test.py" to make the same test with parallel processing.
-
-    ------
-    Parameters : 
-        n_traits : int
-        Number of phenotypic traits defining the dimension of the space
-        initial_position : np.array
-        One dimensional Numpy array of size n_traits representing the position of the initial phenotype of the individual
-        alpha : float
-        Robustness parameter in fitness function. Here, alpha always equals 1/2
-        Q : int
-        Epistasis parameter in fitness function. Here, Q always equals 2
-        sigma_mut : float
-        standard deviation of the mutation's distribution
-        duplication_rate : float
-        rate of duplication in terms of number of duplication per gene and generations
-        deletion_rate : float
-        rate of deletion in terms of number of deletion per gene and generations
-        mutation_rate : float
-        rate of mutation in terms of number of mutation par gene and generations
-        ratio : float
-        ratio between the standard deviation (size) of the first gene and the one of mutations
-        method : str
-        method used to create the first gene. Can be : random, parallel, orthogonal, semi_neutral, neutral, only_one_deleterious_direction
-        mutation_method : str
-        method used to make mutations at each generations : can be one_gene, all_gene, always_all_gene. The most used method here
-        is the last as we mutate each genes at each generations.
-        n_generations : int
-        number of time step to simulate in the evolution. 
-
-    ------
-    Return :
-        None
-        plot graphics : Final fitness of the individual in 100 simulations depending on its number of genes.
-        
-    """
     # cost of complexity :
     results = {}
     count = 0
@@ -1337,46 +1091,9 @@ def genotypic_complexity(n_traits, initial_position, alpha, Q, sigma_mut, duplic
     plt.show()
     # The more the genes are duplicated, the more the final fitness is far from optimum (fopt=1)
 
-def optimum_distance(n_traits, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method, mutation_method, n_generations, list_init_dist):
-    """
-    Simulate the evolution of an inidivudal beginning at different distances from the optimum.
-
-    ------
-    Parameters : 
-        n_traits : int
-        Number of phenotypic traits defining the dimension of the space
-        alpha : float
-        Robustness parameter in fitness function. Here, alpha always equals 1/2
-        Q : int
-        Epistasis parameter in fitness function. Here, Q always equals 2
-        sigma_mut : float
-        standard deviation of the mutation's distribution
-        duplication_rate : float
-        rate of duplication in terms of number of duplication per gene and generations
-        deletion_rate : float
-        rate of deletion in terms of number of deletion per gene and generations
-        mutation_rate : float
-        rate of mutation in terms of number of mutation par gene and generations
-        ratio : float
-        ratio between the standard deviation (size) of the first gene and the one of mutations
-        method : str
-        method used to create the first gene. Can be : random, parallel, orthogonal, semi_neutral, neutral, only_one_deleterious_direction
-        mutation_method : str
-        method used to make mutations at each generations : can be one_gene, all_gene, always_all_gene. The most used method here
-        is the last as we mutate each genes at each generations.
-        n_generations : int
-        number of time step to simulate in the evolution. 
-        list_init_dist : list
-        list of distances from the optimum we want to test
-
-    ------
-    Return :
-        None
-        plot graphics : Evolution of fitness over time / Number of fixed mutational events /
-        mean effect of beneficial mutation, for each initial position
-        
-    """
+def optimum_distance(n_traits, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method, mutation_method, n_generations):
     # Change in init pos
+    list_init_dist = [0.5, 1, 5, 10, 15, 20]
     results = {}
     count = 0
     for d in list_init_dist :
@@ -1429,47 +1146,9 @@ def optimum_distance(n_traits, alpha, Q, sigma_mut, duplication_rate, deletion_r
     # Nice but seems like the effect diminish when d=10 : when to far away its a problem to ? 
     # not a problem when we take mutation on one gene only --> the graph is nice
 
-def rate_of_mutation(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, ratio, method, mutation_method, n_generations, list_mu):
-    """
-    Simulate the evolution of an individual for different mutation rates
-
-    ------
-    Parameters : 
-        n_traits : int
-        Number of phenotypic traits defining the dimension of the space
-        initial_position : np.array
-        One dimensional Numpy array of size n_traits representing the position of the initial phenotype of the individual
-        alpha : float
-        Robustness parameter in fitness function. Here, alpha always equals 1/2
-        Q : int
-        Epistasis parameter in fitness function. Here, Q always equals 2
-        sigma_mut : float
-        standard deviation of the mutation's distribution
-        duplication_rate : float
-        rate of duplication in terms of number of duplication per gene and generations
-        deletion_rate : float
-        rate of deletion in terms of number of deletion per gene and generations
-        mutation_rate : float
-        rate of mutation in terms of number of mutation par gene and generations
-        ratio : float
-        ratio between the standard deviation (size) of the first gene and the one of mutations
-        method : str
-        method used to create the first gene. Can be : random, parallel, orthogonal, semi_neutral, neutral, only_one_deleterious_direction
-        mutation_method : str
-        method used to make mutations at each generations : can be one_gene, all_gene, always_all_gene. The most used method here
-        is the last as we mutate each genes at each generations.
-        n_generations : int
-        number of time step to simulate in the evolution. 
-        list_mu : list
-        list of mutation's rate we want to test.
-
-    ------
-    Return :
-        None
-        plot graphics : evolution of fitness over time for each mutation rate
-        
-    """
+def rate_of_mutation(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, ratio, method, mutation_method, n_generations):
     # Role of mutation rate
+    list_mu = [10**(-4), 10**(-5), 10**(-6)]
     results = {}
     for mu in list_mu :
         fgm = FisherGeometricModel(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mu, ratio, method)
@@ -1487,47 +1166,9 @@ def rate_of_mutation(n_traits, initial_position, alpha, Q, sigma_mut, duplicatio
     plt.legend()
     plt.show()
 
-def rate_of_rearrangement(n_traits, initial_position, alpha, Q, sigma_mut, mutation_rate, ratio, method, mutation_method, n_generations, list_mu):
-    """
-    Simulate the evolution of an individual for different rearrangement (duplication and deletion) rates
-
-    ------
-    Parameters : 
-        n_traits : int
-        Number of phenotypic traits defining the dimension of the space
-        initial_position : np.array
-        One dimensional Numpy array of size n_traits representing the position of the initial phenotype of the individual
-        alpha : float
-        Robustness parameter in fitness function. Here, alpha always equals 1/2
-        Q : int
-        Epistasis parameter in fitness function. Here, Q always equals 2
-        sigma_mut : float
-        standard deviation of the mutation's distribution
-        duplication_rate : float
-        rate of duplication in terms of number of duplication per gene and generations
-        deletion_rate : float
-        rate of deletion in terms of number of deletion per gene and generations
-        mutation_rate : float
-        rate of mutation in terms of number of mutation par gene and generations
-        ratio : float
-        ratio between the standard deviation (size) of the first gene and the one of mutations
-        method : str
-        method used to create the first gene. Can be : random, parallel, orthogonal, semi_neutral, neutral, only_one_deleterious_direction
-        mutation_method : str
-        method used to make mutations at each generations : can be one_gene, all_gene, always_all_gene. The most used method here
-        is the last as we mutate each genes at each generations.
-        n_generations : int
-        number of time step to simulate in the evolution. 
-        list_mu : list
-        list of rearrangement's rate we want to test.
-
-    ------
-    Return :
-        None
-        plot graphics : evolution of fitness over time for each rearrangement rate
-        
-    """
+def rate_of_rearrangement(n_traits, initial_position, alpha, Q, sigma_mut, mutation_rate, ratio, method, mutation_method, n_generations):
     # Role of rearrangement rates
+    list_mu = [10**(-2), 10**(-3), 10**(-4)]
     results = {}
     for mu in list_mu :
         fgm = FisherGeometricModel(n_traits, initial_position, alpha, Q, sigma_mut, mu, mu, mutation_rate, ratio, method)
@@ -1546,46 +1187,6 @@ def rate_of_rearrangement(n_traits, initial_position, alpha, Q, sigma_mut, mutat
     plt.show()
 
 def ratio_gene_mutation(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, method, mutation_method, n_generations, list_ratio):
-    """
-    Simulate the evolution of an individual for different ratio between 
-    the size of the first gene and the size of mutations
-
-    ------
-    Parameters : 
-        n_traits : int
-        Number of phenotypic traits defining the dimension of the space
-        initial_position : np.array
-        One dimensional Numpy array of size n_traits representing the position of the initial phenotype of the individual
-        alpha : float
-        Robustness parameter in fitness function. Here, alpha always equals 1/2
-        Q : int
-        Epistasis parameter in fitness function. Here, Q always equals 2
-        sigma_mut : float
-        standard deviation of the mutation's distribution
-        duplication_rate : float
-        rate of duplication in terms of number of duplication per gene and generations
-        deletion_rate : float
-        rate of deletion in terms of number of deletion per gene and generations
-        mutation_rate : float
-        rate of mutation in terms of number of mutation par gene and generations
-        ratio : float
-        ratio between the standard deviation (size) of the first gene and the one of mutations
-        method : str
-        method used to create the first gene. Can be : random, parallel, orthogonal, semi_neutral, neutral, only_one_deleterious_direction
-        mutation_method : str
-        method used to make mutations at each generations : can be one_gene, all_gene, always_all_gene. The most used method here
-        is the last as we mutate each genes at each generations.
-        n_generations : int
-        number of time step to simulate in the evolution. 
-        list_ratio : list
-        list of ratio we want to test.
-
-    ------
-    Return :
-        None
-        plot graphics : evolution of fitness over time for each ratio
-        
-    """
     # test avec différent ratio 
     results = {}
     count = 0
@@ -1618,45 +1219,6 @@ def ratio_gene_mutation(n_traits, initial_position, alpha, Q, sigma_mut, duplica
     plt.show()
 
 def mutation_std(n_traits, initial_position, alpha, Q, duplication_rate, deletion_rate, mutation_rate, ratio, method, mutation_method, n_generations, list_sigma):
-    """
-    Simulate the evolution of an individual for different standard deviation of the distribution of mutations.
-
-    ------
-    Parameters : 
-        n_traits : int
-        Number of phenotypic traits defining the dimension of the space
-        initial_position : np.array
-        One dimensional Numpy array of size n_traits representing the position of the initial phenotype of the individual
-        alpha : float
-        Robustness parameter in fitness function. Here, alpha always equals 1/2
-        Q : int
-        Epistasis parameter in fitness function. Here, Q always equals 2
-        sigma_mut : float
-        standard deviation of the mutation's distribution
-        duplication_rate : float
-        rate of duplication in terms of number of duplication per gene and generations
-        deletion_rate : float
-        rate of deletion in terms of number of deletion per gene and generations
-        mutation_rate : float
-        rate of mutation in terms of number of mutation par gene and generations
-        ratio : float
-        ratio between the standard deviation (size) of the first gene and the one of mutations
-        method : str
-        method used to create the first gene. Can be : random, parallel, orthogonal, semi_neutral, neutral, only_one_deleterious_direction
-        mutation_method : str
-        method used to make mutations at each generations : can be one_gene, all_gene, always_all_gene. The most used method here
-        is the last as we mutate each genes at each generations.
-        n_generations : int
-        number of time step to simulate in the evolution. 
-        list_sigma : list
-        list of standard deviation we want to test.
-
-    ------
-    Return :
-        None
-        plot graphics : evolution of fitness and number of genes over time for each standard deviation
-        
-    """
     # test avec différent sigma 
     results = {}
     count = 0
@@ -1684,52 +1246,11 @@ def mutation_std(n_traits, initial_position, alpha, Q, duplication_rate, deletio
 
     plt.xlabel('Time')
     plt.ylabel('Number of Genes')
-    plt.title('Evolution of the number of genes Over Time with Different mutation standard deviation')
+    plt.title('Evolution of the number of genes Over Time with Different  mutation standard deviation')
     plt.legend()
     plt.show()
 
 def mutations_technics(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method, mutation_method, n_generations):
-    """
-    Simulate the evolution of an individual for different mutation technics : 
-    One where there are no rearrangements (but mutation affect all genes at each generation) ;
-    One where there are rearrangements and mutations affect all genes at each generation ;
-    One where there are rearrangements and mutations affect only one (or some) genes at each generation depending of the mutation rate.
-    Make 50 simulations per versions and plot the mean result of these simmulations for each version.
-
-    ------
-    Parameters : 
-        n_traits : int
-        Number of phenotypic traits defining the dimension of the space
-        initial_position : np.array
-        One dimensional Numpy array of size n_traits representing the position of the initial phenotype of the individual
-        alpha : float
-        Robustness parameter in fitness function. Here, alpha always equals 1/2
-        Q : int
-        Epistasis parameter in fitness function. Here, Q always equals 2
-        sigma_mut : float
-        standard deviation of the mutation's distribution
-        duplication_rate : float
-        rate of duplication in terms of number of duplication per gene and generations
-        deletion_rate : float
-        rate of deletion in terms of number of deletion per gene and generations
-        mutation_rate : float
-        rate of mutation in terms of number of mutation par gene and generations
-        ratio : float
-        ratio between the standard deviation (size) of the first gene and the one of mutations
-        method : str
-        method used to create the first gene. Can be : random, parallel, orthogonal, semi_neutral, neutral, only_one_deleterious_direction
-        mutation_method : str
-        method used to make mutations at each generations : can be one_gene, all_gene, always_all_gene. The most used method here
-        is the last as we mutate each genes at each generations.
-        n_generations : int
-        number of time step to simulate in the evolution. 
-
-    ------
-    Return :
-        None
-        plot graphics : evolution of fitness over time for each versions
-        
-    """
     # Comparaison avec FGM standart :
     results = {"No_Rearrangement" : [], "Mut_all_genome" : [], "Mut_per_gene" : []}
     count = 0
@@ -1752,7 +1273,7 @@ def mutations_technics(n_traits, initial_position, alpha, Q, sigma_mut, duplicat
         print("Test realized: ", count)
 
         fgm3 = FisherGeometricModel(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method) # Case with a mutation rate per gene 
-        fgm3.evolve_successive(n_generations, "one_gene")
+        fgm3.evolve_successive(n_generations, mutation_method)
         results["Mut_per_gene"].append(fgm3.fitness)
         count += 1
         print("Test realized: ", count)
@@ -1771,529 +1292,12 @@ def mutations_technics(n_traits, initial_position, alpha, Q, sigma_mut, duplicat
     plt.legend()
     plt.show()
 
-def test_proportion(sigma_mut, ratio): 
+def test_proportion(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method, mutation_method, n_generations, dist): 
     """
-    Compute the proportion of duplication event at a given distance from the optimum or for a given dimension.
-    To do so, randomly initialize an individual's phenotype at a random distance from the optimum 
-    in a space of random dimension, with a random beneficial first gene. 
-    Then, test if the duplication of the gene is beneficial.
-    Repeat it 1000000 times and compute the proportion. 
-    Call for histogram plotting functions.
+    Compute the proportion of a given mutational event at a given distance from the optimum. 
     
     ------
     Parameters : 
-        sigma_mut : float
-        standard deviation of the mutation's distribution
-        ratio : float
-        ratio between the standard deviation (size) of the first gene and the one of mutations
-
-    ------
-    Return :
-        None
-        Call for plotting function of for plotting histograms of proportions 
-        
-    """
-    # test proportion 
-    nb_test = 10**6
-    seeds = np.random.randint(0, 2**31 - 1, nb_test) 
-
-    dimensions = np.random.randint(2, 101, nb_test)
-    # distances = np.round(np.random.uniform(0.5, 20, nb_test), 2)
-    distances = np.random.uniform(0.5, 20, nb_test)
-
-    with Pool() as pool:
-        beneficial_counts = pool.starmap(run_proportion, [(seeds[i], dimensions[i], distances[i], sigma_mut, ratio) for i in range(len(dimensions))])
-
-    beneficial_counts = np.array(beneficial_counts)
-
-    plot_histograms(distances, dimensions, beneficial_counts)
-    plot_proportion_histograms(distances, dimensions, beneficial_counts)
-
-def test_fixed_proportion(sigma_mut, ratio, n, d): 
-    """
-    Compute the proportion of duplication event at a given distance from the optimum or for a given dimension.
-    This time, one of the two variables is fixed at a ceratain value. Only the other (set as negative in the function arguments)
-    can change of value at each simulation. The two variables can also be fixed at the same time. Therefore, we can have :
-    - the proportion of beneficial duplication at a certain distance and in different dimensions
-    - the proportion of beneficial duplication in a certain dimension at different distances
-    - the proportion of beneficial duplication at a certain distance and in a certain dimension
-    Repeat it 1000000 times and compute the proportion. 
-    Call for histogram plotting functions.
-    
-    ------
-    Parameters : 
-        sigma_mut : float
-        standard deviation of the mutation's distribution
-        ratio : float
-        ratio between the standard deviation (size) of the first gene and the one of mutations
-
-    ------
-    Return :
-        None
-        Call for plotting function of for plotting histograms of proportions 
-        
-    """
-    # test proportion 
-    nb_test = 10**6
-    seeds = np.random.randint(0, 2**31 - 1, nb_test) 
-
-    if n < 0 :
-        dimensions = np.random.randint(2, 101, nb_test)
-        with Pool() as pool:
-            beneficial_counts = pool.starmap(run_proportion, [(seeds[i], dimensions[i], d, sigma_mut, ratio) for i in range(len(dimensions))])
-
-        beneficial_counts = np.array(beneficial_counts)
-        plot_dimension_histograms(dimensions, beneficial_counts, d)
-   
-    elif d < 0 :
-        distances = np.random.uniform(0.5, 20, nb_test)
-        with Pool() as pool:
-            beneficial_counts = pool.starmap(run_proportion, [(seeds[i], n, distances[i], sigma_mut, ratio) for i in range(len(distances))])
-
-        beneficial_counts = np.array(beneficial_counts)
-        plot_distance_histograms(distances, beneficial_counts, n)
-
-    else :
-        with Pool() as pool:
-            beneficial_counts = pool.starmap(run_proportion, [(seeds[i], n, d, sigma_mut, ratio) for i in range(len(seeds))])
-
-        beneficial_counts = np.array(beneficial_counts)
-        prop = len(beneficial_counts[beneficial_counts == 1])/len(beneficial_counts)
-        print(f"The proportion of beneficial duplication in a space of dimension {n} and at adistance from the optimum of {d} is : {prop}")
-
-
-def run_proportion(seed, n, d, sigma_mut, ratio):
-    """
-    Test is the duplication of a random beneficial first gene is also beneficial
-    at a given initial distance from the optimum and dimension of the space. 
-
-    ------
-    Parameters : 
-        seed : int
-        Seed for np.random.seed() method (ensure that each random choice or different in different simulations)
-        n : int
-        Number of phenotypic traits defining the dimension of the space 
-        d : float
-        Initial distance from the optimum
-        sigma_mut : float
-        standard deviation of the mutation's distribution
-        ratio : float
-        ratio between the standard deviation (size) of the first gene and the one of mutations
-
-    ------
-    Return :
-        beneficial : Bool
-        is TRUE if and only if the duplication is beneficial (the phenotype after duplication is closer to the optimum)
-        d1 : float
-        (Rounded) distance (2 decimals) to the optimum where we test if the duplication is beneficial or not
-        
-    """
-    np.random.seed(seed)
-
-    final_position = np.random.normal(0, 1, n)
-    final_position /= np.linalg.norm(final_position)
-    final_position *= d # the distance is the distance to the optimum of the phenotype after the fixation of the first gene
-
-    delta = 1
-    while delta >= 0 : # we consider that the first gene must be beneficial so that the organism survive
-        gene = np.random.normal(0, ratio*sigma_mut, n) # We draw the gene as if it was a mutation (of bigger size) of the starting point in the Standart FGM
-        initial_position = final_position - gene # compute the initial phenotypic position before adding the gene 
-        delta = np.linalg.norm(final_position) - np.linalg.norm(initial_position) # if delta < 0, the new phenotype is closer to the optimum and the first gene is beneficial
-
-
-    new_phenotype = final_position + gene # new phenotype after the duplication of the unique gene
-
-    d1 = np.linalg.norm(final_position) # distance to the optimum before the duplication
-    d2 = np.linalg.norm(new_phenotype) # distance to the optimum after the duplication
-
-    beneficial = d2 < d1 # if the new phenotype is closer to the optimum
-
-    # d1 = np.round(d1, 2)
-    print("Done")
-    return beneficial
-
-def plot_histograms(distances, dimensions, beneficial_counts):
-    """
-    Plot Histograms counting the number of beneficial and non-beneficial duplication 
-    depending on : 
-    - the distance to the optimum
-    - the dimensionality of the space
-    - both (2D Heatmap)
-
-    ------
-    Parameters :
-        distances : np.array
-        One dimensional numpy array of every distance tested (see test_proportion)
-        dimensions : np.array
-        One dimensional numpy array of every dimensions tested (see test_proportion)
-        beneficial_counts : np.array 
-        One dimensional numpy array of boolean : True is that the duplication was beneficial
-
-    ------
-    Return : 
-        None 
-        Plot the histograms of counting
-
-    """
-    # Histogram for distance d
-    plt.figure(figsize=(12, 5))
-
-    plt.subplot(1, 2, 1)
-    plt.hist(distances[beneficial_counts == 1], bins=100, alpha=0.5, label='Beneficial', color='green')
-    plt.hist(distances[beneficial_counts == 0], bins=100, alpha=0.5, label='Non-Beneficial', color='red')
-    plt.xlabel('Distance d')
-    plt.ylabel('Count')
-    plt.title('Histogram of Beneficial vs. Non-Beneficial Duplication by Distance')
-    plt.legend()
-
-    # Histogram for dimension n
-    plt.subplot(1, 2, 2)
-    plt.hist(dimensions[beneficial_counts == 1], bins=99, alpha=0.5, label='Beneficial', color='green')
-    plt.hist(dimensions[beneficial_counts == 0], bins=99, alpha=0.5, label='Non-Beneficial', color='red')
-    plt.xlabel('Dimension n')
-    plt.ylabel('Count')
-    plt.title('Histogram of Beneficial vs. Non-Beneficial Duplication by Dimension')
-    plt.legend()
-
-    plt.tight_layout()
-    plt.show()
-
-    # 2D Histogram (Heatmap) for distance d vs. dimension n
-    plt.figure(figsize=(8, 6))
-    plt.hist2d(distances, dimensions, bins=(99, 99), cmap='Blues', weights=beneficial_counts)
-    plt.colorbar(label='Number of Beneficial Duplication Events')
-    plt.xlabel('Distance d')
-    plt.ylabel('Dimension n')
-    plt.title('Heatmap of Beneficial Duplication by Distance and Dimension')
-    plt.show()
-
-def plot_proportion_histograms(distances, dimensions, beneficial_counts):
-    """
-    Plot Histograms of the porportion of beneficial duplications
-    depending on : 
-    - the distance to the optimum
-    - the dimensionality of the space
-    - both (2D Heatmap)
-
-    ------
-    Parameters :
-        distances : np.array
-        One dimensional numpy array of every distance tested (see test_proportion)
-        dimensions : np.array
-        One dimensional numpy array of every dimensions tested (see test_proportion)
-        beneficial_counts : np.array 
-        One dimensional numpy array of boolean : True is that the duplication was beneficial
-
-    ------
-    Return : 
-        None 
-        Plot the histograms of proportion
-
-    """
-    bins_d = np.linspace(0, 20, 105)
-    bins_n = np.arange(2, 102, 1)
-
-    hist_b, bin_edges_d = np.histogram(distances[beneficial_counts == 1], bins=bins_d)
-    hist_all, _ = np.histogram(distances, bins=bins_d)
-    proportion_d = hist_b / hist_all
-    proportion_d[np.isnan(proportion_d)] = 0
-
-    hist_b, bin_edges_n = np.histogram(dimensions[beneficial_counts == 1], bins=bins_n)
-    hist_all, _ = np.histogram(dimensions, bins=bins_n)
-    proportion_n = hist_b / hist_all
-    proportion_n[np.isnan(proportion_n)] = 0
-
-    plt.figure(figsize=(12, 5))
-
-    plt.subplot(1, 2, 1)
-    plt.bar(bin_edges_d[:-1], proportion_d, width=np.diff(bin_edges_d), edgecolor="black", align="edge")
-    plt.xlabel('Distance d')
-    plt.ylabel('Proportion of Beneficial Duplication')
-    plt.title('Proportion of Beneficial Duplication by Distance')
-
-    plt.subplot(1, 2, 2)
-    plt.bar(bin_edges_n[:-1], proportion_n, width=np.diff(bin_edges_n), edgecolor="black", align="edge")
-    plt.xlabel('Dimension n')
-    plt.ylabel('Proportion of Beneficial Duplication')
-    plt.title('Proportion of Beneficial Duplication by Dimension')
-
-    plt.tight_layout()
-    plt.show()
-
-    # 2D Heatmap for the proportion of beneficial duplication
-    hist_b, xedges, yedges = np.histogram2d(distances[beneficial_counts == 1], dimensions[beneficial_counts == 1], bins=[bins_d, bins_n])
-    hist_all, _, _ = np.histogram2d(distances, dimensions, bins=[bins_d, bins_n])
-    proportion_2d = hist_b / hist_all
-    proportion_2d[np.isnan(proportion_2d)] = 0
-
-    plt.figure(figsize=(8, 6))
-    plt.imshow(proportion_2d.T, origin='lower', aspect='auto', extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], cmap='viridis')
-    plt.colorbar(label='Proportion of Beneficial Duplication Events')
-    plt.xlabel('Distance d')
-    plt.ylabel('Dimension n')
-    plt.title('Heatmap of Proportion of Beneficial Duplication by Distance and Dimension')
-    plt.show()
-
-def plot_distance_histograms(distances, beneficial_counts, n):
-    """
-    Plot Histogram of the porportion of beneficial duplications
-    depending on : 
-    - the distance to the optimum
-    The dimension of the space is fixed.
-
-    ------
-    Parameters :
-        distances : np.array
-        One dimensional numpy array of every distance tested (see test_proportion)
-        beneficial_counts : np.array 
-        One dimensional numpy array of boolean : True is that the duplication was beneficial
-        n : int
-        Dimension of the phenotypic space
-
-    ------
-    Return : 
-        None 
-        Plot the histograms of proportion
-
-    """
-    bins_d = np.linspace(0, 20, 105)
-
-    hist_b, bin_edges_d = np.histogram(distances[beneficial_counts == 1], bins=bins_d)
-    hist_all, _ = np.histogram(distances, bins=bins_d)
-    proportion_d = hist_b / hist_all
-    proportion_d[np.isnan(proportion_d)] = 0
-
-    plt.figure(figsize=(12, 5))
-
-    plt.bar(bin_edges_d[:-1], proportion_d, width=np.diff(bin_edges_d), edgecolor="black", align="edge")
-    plt.xlabel('Distance d')
-    plt.ylabel('Proportion of Beneficial Duplication')
-    plt.title(f'Proportion of Beneficial Duplication by Distance for n = {n}')
-
-    plt.tight_layout()
-    plt.show()
-
-def plot_dimension_histograms(dimensions, beneficial_counts, d):
-    """
-    Plot Histogram of the porportion of beneficial duplications
-    depending on : 
-    - the dimension of the space
-    The distance to the optimum is fixed.
-
-    ------
-    Parameters :
-        dimensions : np.array
-        One dimensional numpy array of every dimensions tested (see test_proportion)
-        beneficial_counts : np.array 
-        One dimensional numpy array of boolean : True is that the duplication was beneficial
-        d : float
-        Distance to the optimum of the phenotype where we try to duplicate the gene
-
-    ------
-    Return : 
-        None 
-        Plot the histograms of proportion
-
-    """
-    bins_n = np.arange(2, 102, 1)
-
-    hist_b, bin_edges_n = np.histogram(dimensions[beneficial_counts == 1], bins=bins_n)
-    hist_all, _ = np.histogram(dimensions, bins=bins_n)
-    proportion_n = hist_b / hist_all
-    proportion_n[np.isnan(proportion_n)] = 0
-
-    plt.figure(figsize=(12, 5))
-
-    plt.bar(bin_edges_n[:-1], proportion_n, width=np.diff(bin_edges_n), edgecolor="black", align="edge")
-    plt.xlabel('Dimension n')
-    plt.ylabel('Proportion of Beneficial Duplication')
-    plt.title(f'Proportion of Beneficial Duplication by Dimension at d = {d}')
-
-    plt.tight_layout()
-    plt.show()
-
-def parallel_version_comparison(alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method, mutation_method, n_generations, list_n, log_dist): 
-    """
-    Simulate the evolution of an indivudal for different version of the model, to see the difference between FGM and GFGM:
-    Standard FGM with no rearrangement
-    GFGM with mutation and duplication
-    GFGM with mutation, duplication dand deletion
-    Make 50 simulation for each version and plot the mean fitness evolution of these simulations for each version.
-
-    Also try the different versions with several dimension n to see the cost of complexity
-
-    ------
-    Parameters : 
-        alpha : float
-        Robustness parameter in fitness function. Here, alpha always equals 1/2
-        Q : int
-        Epistasis parameter in fitness function. Here, Q always equals 2
-        sigma_mut : float
-        standard deviation of the mutation's distribution
-        duplication_rate : float
-        rate of duplication in terms of number of duplication per gene and generations
-        deletion_rate : float
-        rate of deletion in terms of number of deletion per gene and generations
-        mutation_rate : float
-        rate of mutation in terms of number of mutation par gene and generations
-        ratio : float
-        ratio between the standard deviation (size) of the first gene and the one of mutations
-        method : str
-        method used to create the first gene. Can be : random, parallel, orthogonal, semi_neutral, neutral, only_one_deleterious_direction
-        mutation_method : str
-        method used to make mutations at each generations : can be one_gene, all_gene, always_all_gene. The most used method here
-        is the last as we mutate each genes at each generations.
-        n_generations : int
-        number of time step to simulate in the evolution. 
-        list_n : list
-        list of dimension we want to compare
-        log_dist : bool
-        If True, the distance to the optimum will be return as a log.
-
-    ------
-    Return :
-        None
-        plot graphics : evolution of fitness over time for each version and each dimensions
-
-    """
-    # parallel computation of the comparison between version
-    # Run simulations in parallel
-    n_simulations = 50
-    seeds = np.random.randint(0, 2**31 - 1, len(list_n)*n_simulations) # Create a pool of seeds so that the random method doesn't gives the same result at each simulation.
-    
-    list_init = []
-    for n in list_n : # Compute an initial position for each dimension (Each simulation begin at the same distance from the optimum)
-        initial_position = np.random.normal(0, 1, n)
-        initial_position /= np.linalg.norm(initial_position)
-        initial_position *= d
-        list_init.append(initial_position)
-
-    with Pool() as pool: # Multiprocessing of the 50 simulations of each version+dimension couple
-        results1 = pool.starmap(run_simulation, [(seed, list_n[i], list_init[i], alpha, Q, sigma_mut, 0, 0, mutation_rate, ratio, "semi_neutral", "always_all_gene", n_generations, log_dist) for i in range(len(list_n)) for seed in seeds[:n_simulations]])
-        results2 = pool.starmap(run_simulation, [(seed, list_n[i], list_init[i], alpha, Q, sigma_mut, duplication_rate, 0, mutation_rate, ratio, "semi_neutral", "always_all_gene", n_generations, log_dist) for i in range(len(list_n)) for seed in seeds[n_simulations:2*n_simulations]])
-        results3 = pool.starmap(run_simulation, [(seed, list_n[i], list_init[i], alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, "semi_neutral", "always_all_gene", n_generations, log_dist) for i in range(len(list_n)) for seed in seeds[2*n_simulations:]])
-    
-    results = [results1, results2, results3] # Gather every result in a list (to use in the next function)
-
-    # Plotting the mean curve of fitness for each version and each dimension 
-    plotting_mean_and_CI(results, list_n, n_simulations, "Fitness")
-    
-    # Same with nb_gene and position 
-    plotting_mean_and_CI(results, list_n, n_simulations, "Number of Genes")
-    if log_dist : 
-        plotting_mean_and_CI(results, list_n, n_simulations, "Log of Distance")
-    else : 
-        plotting_mean_and_CI(results, list_n, n_simulations, "Distance")
-
-def plotting_mean_and_CI(results, list_n, n_simulations, ylab):
-    """
-    Plot the mean curve with its confidence intervals of a given variable (fitness, distance, number of genes),
-    in function of time.
-    A certain number of simulations (given has paramater) of the evolution of an individual 
-    has been made for each version of GFGM and different dimensionality (see "parallel_version_comparison). 
-    Therefore, the mean result of these simulations must be plotted.
-
-    ------
-    Parameters :
-        results : list 
-        List of the results of each simulations. It is composed of three lists : one for each version of the model.
-        These lists contain the results of the evolution of every simulations (list of fitness, list of the number of genes, 
-        and list of the distance to the optimum, in this order). These results are ordered like this : first are the 50 simulations for the first dimension,
-        then the 50 simulations for the second one, etc... 
-        list_n : list
-        List of the dimension tested
-        n_simulations : int
-        Number of simulations made for each version and dimension
-        ylab: str
-        The variable we want to plot. Can be "Fitness", "Distance" or "Number of Genes".
-
-    ------
-    Return :
-        None
-        Plot the wanted curve
-
-    """
-    total_list = []
-    if ylab == "Fitness" : # find the index of the variables in the list of results of simulations
-        index = 0
-    elif ylab == "Number of Genes" :
-        index = 1
-    else : 
-        index = 2
-    for l in results : # retrieve the corresponding results for this variable for each version
-        tmp = [l[i][index] for i in range(len(l))]
-        total_list.append(tmp)
-
-    list_mean = []
-    list_std = []
-    for i in range(len(total_list)): # compute the mean and standard deviation of the results for each version and each dimension 
-        for j in range(0,n_simulations*(len(list_n)-1)+1,n_simulations):
-            list_mean.append(mean_list(total_list[i][j:j+n_simulations]))
-            list_std.append(standard_deviation(total_list[i][j:j+n_simulations]))
-
-    list_lower = []
-    list_upper = []
-    if ylab == "Log of Distance" :
-        list_log_mean = []
-        for k in range(len(list_mean)): # compute the confidence intervals
-            ci = [1.96*np.sqrt(std**2/n_simulations + std**4/(2*(n_simulations-1))) for std in list_std[k]]
-            log_mean = [list_mean[k][i] + (list_std[k][i]**2)/2 for i in range(len(list_mean[k]))]
-            list_lower.append([log_mean[i] - ci[i] for i in range(len(ci))])
-            list_upper.append([log_mean[i] + ci[i] for i in range(len(ci))])
-            list_log_mean.append(log_mean)
-        list_mean = list_log_mean
-
-    else :
-        for k in range(len(list_mean)): # compute the confidence intervals
-            ci = [1.96*std/np.sqrt(n_simulations) for std in list_std[k]]
-            list_lower.append([list_mean[k][i] - ci[i] for i in range(len(ci))])
-            list_upper.append([list_mean[k][i] + ci[i] for i in range(len(ci))])
-
-    x = np.arange(0, len(list_lower[0]), 1) # abscisse for the confidence intervals to be plotted
-
-    fig, ax = plt.subplots()
-    lines = ["-", "--", ":"]
-    colors = ["b", "r", "g"]
-    labels = ['Only Mutations', 'Mutations and Duplications', 'Mutations, Duplications and Deletions']
-    dimensions = [str(n) for n in list_n]
-    for k in range(len(list_mean)): # plot each mean curve with its confidence interval
-        ax.plot(list_mean[k], label = labels[k//3], color = colors[k//3], ls = lines[k%3])
-        ax.fill_between(x, list_lower[k], list_upper[k], color = colors[k//3], alpha = .1)
-
-    # Create custom legend for colors and line styles
-    color_handles = [Line2D([0], [0], color=color, lw=2) for color in colors]
-    line_handles = [Line2D([0], [0], color='black', lw=2, linestyle=line) for line in lines]
-
-    color_labels = labels
-    line_labels = dimensions
-
-    if ylab == "Distance" or ylab == "Log of Distance" : # For the graphic of the distance, the position of the legend need to be adapted to be readable
-        location = 'upper right'
-        anchor1 = (1,1)
-        anchor2 = (1, 0.8)
-    else :
-        location = 'lower right'
-        anchor1 = (1, 0.2)
-        anchor2 = (1, 0)
-
-    legend1 = ax.legend(color_handles, color_labels, title="Evolution Type", loc=location, bbox_to_anchor=anchor1)
-    legend2 = ax.legend(line_handles, line_labels, title="Dimension", loc=location, bbox_to_anchor=anchor2)
-
-    ax.add_artist(legend1) # Add the customed legend
-
-    plt.xlabel('Mutational Event')
-    plt.ylabel(ylab) # ylabel depend of the variable studied
-    plt.title(f'Evolution of {ylab} Over Time with Different Version of FGM and Different Dimension')
-    plt.show()
-    
-def run_simulation(seed, n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method, mutation_method, n_generations, log_dist = True):
-    """
-    Simulate the evolution of an individual with given parameters (used for multiprocess computation of simulations)
-
-    ------
-    Parameters : 
-        seed : int
-        seed for np.random.seed() method (ensure that each random choice or different in different simulations)
         n_traits : int
         Number of phenotypic traits defining the dimension of the space
         initial_position : np.array
@@ -2319,35 +1323,44 @@ def run_simulation(seed, n_traits, initial_position, alpha, Q, sigma_mut, duplic
         is the last as we mutate each genes at each generations.
         n_generations : int
         number of time step to simulate in the evolution. 
-        log_dist : bool
-        If True, the distance to the optimum will be return as a log. Default is True.
-        
+        dist : float
+        distance from the optimum at which we want to compute the proportion.
+
     ------
     Return :
-        fgm.fitness : list
-        list of fitness values of the individual's phenotype taken during the evolution
-        fgm.nb_genes : list
-        list of the number of gene in the individual's genotype during evolution
-        path : list
-        list of the distance to the optimum of the individual's phenotype during evolution. 
-        If log_dist is True, the distance is in log.
-
+        None
+        print the wanted proportion
+        
     """
-    np.random.seed(seed)
-    fgm = FisherGeometricModel(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method)
-    fgm.evolve_successive(n_generations, mutation_method)
+    # test proportion 
+    results = {"beneficial_dupl" : [], "total_dupl" : []}
+    count = 0
+    for i in range(100):
+        fgm = FisherGeometricModel(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method) 
+        fgm.evolve_successive(n_generations, mutation_method)
 
-    path = []
-    if log_dist :
-        for pos in fgm.memory :
-            path.append(np.log10(np.linalg.norm(pos)))
-    else :
-        for pos in fgm.memory :
-            path.append(np.linalg.norm(pos)) # compute the distance to the origin for every position 
+        # effects needs to be an imbricated dictionnary where we memorize :
+        # the mutational method, its effect, the distance where it happend, 
+        # the number of genes there were at this moment, and finlaly, the fitness effect
+        nb_benef_dupl_at_fixed_dist = 0
+        if dist in fgm.effects["duplication"]["beneficial"].keys() :
+            list_study = list(fgm.effects["duplication"]["beneficial"][dist].values())
+            merged = list(itertools.chain.from_iterable(list_study)) # concatenate the lists of each values in the dictionnary
+            nb_benef_dupl_at_fixed_dist = len(merged)
+            results["beneficial_dupl"].append(nb_benef_dupl_at_fixed_dist)
 
-    print('Done')
-    return fgm.fitness, fgm.nb_genes, path
+        if dist in fgm.effects["duplication"]["neutral_deleterious"].keys() : 
+            list_not_study = list(fgm.effects["duplication"]["neutral_deleterious"][dist].values())
+            merged_bis = list(itertools.chain.from_iterable(list_not_study))
+            tot_nb_dupl_at_fixed_dist = nb_benef_dupl_at_fixed_dist + len(merged_bis)
+            results["total_dupl"].append(tot_nb_dupl_at_fixed_dist)
 
+        # tot_dupl = fgm.counter["duplication"]
+        count += 1 
+        print("Test realized: ", count)
+
+    proportion = np.sum(results["beneficial_dupl"])/np.sum(results["total_dupl"])
+    print(f"The proportion of beneficial duplication at a distance {dist} from the optimum is of {proportion}")
 
 ####################
 #### Parameters ####
@@ -2358,7 +1371,7 @@ if __name__ == "__main__" :
     # problème : peut pas partir de très loin : si on augmente trop la position initial ça fait des divisions par 0 dans le log et plus rien ne marche
 
     # initial_position = np.zeros(n_traits)
-    # initial_position[0] = 25 # Initial phenotype on an axe
+    # initial_position[0] = 25 # pour partir sur un axe
 
     d = 20 # Wanted initial distance to the optimum
     initial_position = np.random.normal(0, 1, n_traits)
@@ -2384,19 +1397,19 @@ if __name__ == "__main__" :
     # simulation(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method, mutation_method, n_generations)
 
     # Cost of phenotypic complexity :
-    # parallel_phenotypic_complexity(d, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method, mutation_method, n_generations, [2, 3, 5, 10, 30, 50, 100])
+    # phenotypic_complexity(d, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method, mutation_method, n_generations, [2, 3, 5, 10, 30, 50, 100])
 
     # Cost of Genotypic complexity :
     # genotypic_complexity(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, method, mutation_method, n_generations)
 
     # Change in initial position :
-    # optimum_distance(n_traits, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method, mutation_method, n_generations, [0.5, 1, 5, 10, 15, 20])
+    # optimum_distance(n_traits, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method, mutation_method, n_generations)
  
     # Mutation rate effect :
-    # rate_of_mutation(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, ratio, method, "all_gene", n_generations, [10**(-4), 10**(-5), 10**(-6)])
+    # rate_of_mutation(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, ratio, method, "all_gene", n_generations)
 
     # Rearrangement rate effect :
-    # rate_of_rearrangement(n_traits, initial_position, alpha, Q, sigma_mut, mutation_rate, ratio, method, mutation_method, n_generations,[10**(-2), 10**(-3), 10**(-4)])
+    # rate_of_rearrangement(n_traits, initial_position, alpha, Q, sigma_mut, mutation_rate, ratio, method, mutation_method, n_generations)
 
     # Size of the gene effect :
     # ratio_gene_mutation(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, method, mutation_method, n_generations, [0.5, 1, 1.5, 2, 3, 5, 10])
@@ -2408,11 +1421,7 @@ if __name__ == "__main__" :
     # mutations_technics(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method, mutation_method, n_generations)
 
     # Test proportion of beneficial duplication 
-    # test_proportion(sigma_mut, ratio)
-    # test_fixed_proportion(sigma_mut, ratio, 100, 20)
+    # test_proportion(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method, mutation_method, n_generations, 2.45)
 
     # Comparison of FGM and GFGM
-    # parallel_version_comparison(alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, "semi_neutral", "always_all_gene", n_generations, [20, 50, 100], True)
-
-    # Historicity test
-    historic_simulation(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method, mutation_method, n_generations)
+    parallel_version_comparison(alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, "semi_neutral", "always_all_gene", n_generations)
