@@ -10,7 +10,6 @@ Iterative version.
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
-import itertools
 from multiprocessing import Pool
 
 ##############################
