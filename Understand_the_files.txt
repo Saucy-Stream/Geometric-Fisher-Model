@@ -61,4 +61,7 @@ This version is the more recent and is useful to really observe the succession o
 - Maths :
 Written sheet with some graphs to represent mutation, duplication and deletion events + an equation about the size and orientation
 of a duplicated gene for it to be beneficial + interpretation of this equation on the last page + little reflexion on the cost of sqrt(n) 
-when adding a gene to the genotype. 
+when adding a gene to the genotype (see the article for more advanced mathematical results)
+
+-New_FGM_v4 :
+Final code with every simulations and final modified version of the model.
