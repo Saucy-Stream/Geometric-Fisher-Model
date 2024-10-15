@@ -242,6 +242,7 @@ class FisherGeometricModel() :
                 
                 z = r * self.sigma_mut # Wanted size of the gene
                 d = np.linalg.norm(self.init_pos) # Wanted distance to the optimum
+                #QUESTION: How does this triangle equation work? Vsiualisation?
                 triangle_surface = z/2 * np.sqrt(d**2 - z**2 / 4) # Geometricaly, the gene vector and the axes linking the initial position / the position after adding the gene to the optimum form an isosceles triangle
                 # there are different way of computing a triangle surface, which help us to find angles from the known distances
                 sinus_gamma = 2*triangle_surface/d**2 
@@ -398,6 +399,7 @@ class FisherGeometricModel() :
         nb_dupl = np.random.poisson(self.duplication_rate*n) # number of duplication to do. the rate is multiply by the number of gene and the size of the population so that it represent the number of duplication per generation.
         if nb_dupl > 0 :
             indices = np.random.randint(0, n, min(nb_dupl, n)) # randomly choose the genes to duplicate, if there are more duplication to do than genes, just duplicate all genes
+            #QUESTION: does this allow for multiple duplications of the same gene?
             for index in indices :
                     list_genes.append(self.genes[index]) # copy the duplicated genes in the list
         return list_genes, nb_dupl > 0
