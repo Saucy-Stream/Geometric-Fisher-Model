@@ -771,11 +771,11 @@ class FisherGeometricModel() :
             for radius in [2,5,10,15,20,30]:
                 circ = plt.Circle((0,0),radius, fill = False, color = 'k')
                 ax.add_patch(circ)
-            kwargs = {'color': 'k'}
+            kwargs = {'scale_units' : 'xy', 'angles' : 'xy', 'color': 'k', 'scale' : 1}
 
         elif self.dimension == 3:
             ax = fig.add_subplot(projection = '3d')
-            kwargs = {'scale_units' : 'xy', 'angles' : 'xy', 'color': 'k'}
+            kwargs = {'color': 'k'}
         else:
             raise Warning("Unable to plot a 2D graph when dimensions > 3")
         
@@ -785,7 +785,7 @@ class FisherGeometricModel() :
         position = np.array(self.init_pos)
         ax.scatter(*position, c = 'r')
         for gene in genome:
-            ax.quiver(*position,*gene, **kwargs)
+            ax.quiver(*position,*gene,**kwargs)
             position += gene
             ax.scatter(*position, c = 'g')
         
@@ -982,14 +982,14 @@ def historic_simulation(n_traits, initial_position, alpha, Q, sigma_mut, duplica
 #### Parameters ####
 ####################p
 if __name__ == "__main__" :
-    n_traits = 2  # Number of traits in the phenotype space n
+    n_traits = 3  # Number of traits in the phenotype space n
     # initial_position = np.ones(n_traits)*5/np.sqrt(n_traits) # Quand la position initiale est plus éloigné de l'origine, la pop à bcp moins de mal à s'améliorer (et les mutations sont plus grandes ?)
     # problème : peut pas partir de très loin : si on augmente trop la position initial ça fait des divisions par 0 dans le log et plus rien ne marche
 
     # initial_position = np.zeros(n_traits)
     # initial_position[0] = 25 # Initial phenotype on an axe
 
-    d = 20 # Wanted initial distance to the optimum
+    d = 35 # Wanted initial distance to the optimum
     initial_position = np.random.normal(0, 1, n_traits)
     initial_position /= np.linalg.norm(initial_position)
     initial_position *= d
