@@ -313,7 +313,7 @@ class FisherGeometricModel() :
 
         return list_genes.tolist(), nb_mut > 0 # convert the list of genes back to a list (necessary because some operations use in the class only work on lists)
     
-    def mutation_on_every_genes(self, list_genes):
+    def mutation_on_every_gene(self, list_genes):
         """
         Randomly mutate every genes in the genotype by adding a gaussian noise to them. The mutation
         may differ from one gene to another. The number of mutation is drawn from a poisson distribution 
@@ -347,7 +347,7 @@ class FisherGeometricModel() :
 
         return list_genes, nb_mut > 0
     
-    def mutation_on_every_genes_v2(self, list_genes):
+    def mutation_on_every_gene_v2(self, list_genes):
         """
         Randomly mutate every genes in the genotype by adding a gaussian noise to them. The mutation
         may differ from one gene to another. We consider in this case that the mutation rate is per genome
@@ -373,6 +373,8 @@ class FisherGeometricModel() :
         n = len(list_genes)
         m = np.random.normal(0, self.sigma_mut, size=(n, self.dimension)) # draw the mutation from a normal distribution of variance n*sigma_mut**2 (variance of a sum of mutation)
         new_genes = [new_genes[i] + m[i] for i in range(n)] # modify every genes in the list by adding the corresponding mutation. All genes do not mutate the same way
+        # print(f"1st gene: {self.genes[0]}, mutation: {m[0]}")
+
         mut = True
         return new_genes, mut
     
@@ -573,7 +575,9 @@ class FisherGeometricModel() :
             mutation, duplication, deletion)
 
         """
-        return np.log(new_fitness/initial_fitness) # when the new fitness is higher than the ancestral one, the ratio is > 1, so the effect is > 0
+        s = np.log(new_fitness/initial_fitness)
+        # print(f"s = {s}")
+        return s # when the new fitness is higher than the ancestral one, the ratio is > 1, so the effect is > 0
         # return new_fitness/initial_fitness - 1 # Martin 2006 (for s small, not used here)
         # if > 0, the mutation as improve the fitness, it is beneficial
     
@@ -642,7 +646,7 @@ class FisherGeometricModel() :
                 list_genes, mut = self.mutation_on_one_gene(list_genes) # test if there are some mutations to do ; mutation on one or some gene
         
                 # If mutation on every genes : 
-                # list_genes, mut = self.mutation_on_every_genes(list_genes) # mutation on every genes
+                # list_genes, mut = self.mutation_on_every_gene(list_genes) # mutation on every genes
             
             if dupl or dele or mut : # if there was at least one modification in the genome
                 new_final_pos = self.init_pos + np.sum(list_genes, axis=0) # compute new phenotypic position
@@ -650,6 +654,7 @@ class FisherGeometricModel() :
                 new_fitness  = self.fitness_function(new_final_pos) # its new fitness
                 s = self.fitness_effect(self.initial_fitness, new_fitness) # the fitness effect of the modification
                 pf = self.fixation_probability(s) # its fixation probality depending on its fitness effect
+                
 
                 if np.random.rand() < pf : # the mutation is fixed
                     method = []
@@ -677,8 +682,6 @@ class FisherGeometricModel() :
                 self.effects.append(0)
 
             self.nb_genes.append(len(self.genes)) # remember the number of genes in the genotype after this iteration
-
-    
     def evolve_successive(self, time_step, case) : # 20 sec
         """
         Main method that simulate the evolution for a certain time. 
@@ -758,13 +761,14 @@ class FisherGeometricModel() :
             if len(self.genes) > 0 : # test if there are some mutations to do
                 if case == "one_gene" : 
                     list_genes, mut = self.mutation_on_one_gene(self.genes)
-                elif case == "all_gene" :
-                    list_genes, mut = self.mutation_on_every_genes(self.genes) 
+                elif case == "every_gene" :
+                    list_genes, mut = self.mutation_on_every_gene(self.genes) 
                 else :
-                    list_genes, mut = self.mutation_on_every_genes_v2(self.genes) 
+                    list_genes, mut = self.mutation_on_every_gene_v2(self.genes) 
 
                 if mut :
                     self.test_fixation(list_genes, "mutation")
+                    #TODO: redesign to make actual test and not test & effects
                 else : 
                     self.fitness.append(self.initial_fitness)
                     self.nb_genes.append(len(self.genes))
@@ -797,7 +801,8 @@ class FisherGeometricModel() :
         new_fitness  = self.fitness_function(new_final_pos) # its new fitness
         s = self.fitness_effect(self.initial_fitness, new_fitness) # the fitness effect of the modification
         pf = self.fixation_probability(s) # its fixation probality depending on its fitness effect
-
+        if pf>0.1 and pf <0.9:
+            print(f"prob = {pf}")
         if np.random.rand() < pf : # the mutation is fixed
             self.genes = list_genes # actualize the genome
             self.final_pos = new_final_pos # and the phenotype
@@ -864,7 +869,6 @@ class FisherGeometricModel() :
         plt.title('Evolution of Fitness Over Time ')
 
         plt.show()
-
 
     def ploting_results(self, fitness, effects, time):
         """
@@ -1117,6 +1121,38 @@ def historic_simulation(n_traits, initial_position, alpha, Q, sigma_mut, duplica
     fitness2 = fgm.fitness
     fgm.plot_historic_fitness(fitness1, fitness2)
 
+def plot_2D_path(fgm : FisherGeometricModel):
+    """
+    Plots the final phenotype and underlying genotype of a 2 dimensional FisherGeometricModel
+
+    Parameters
+    -----
+    fgm : FisherGeometricModel
+        A FisherGeometricModel with n = 2
+    
+    Returns
+    -----
+    None
+        Prints path
+    """
+    number_of_genes = np.shape(fgm.genes)[0]
+    genome = np.resize(fgm.genes.copy(),(number_of_genes,2))
+
+    fig, ax = plt.subplots(1,1, figsize = (10,4))
+    
+    position = np.array(fgm.init_pos)
+    ax.scatter(*position, c = 'r')
+
+    for gene in genome:
+        print(gene)
+        ax.quiver(*position,*gene,scale = 1,scale_units = 'xy', angles = 'xy', color = 'k')
+        position += gene
+        ax.scatter(*position, c = 'g')
+
+    
+    plt.grid()
+    plt.show()
+    
 
 def phenotypic_complexity(d, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method, mutation_method, n_generations, list_n):
     """
@@ -2350,11 +2386,12 @@ def run_simulation(seed, n_traits, initial_position, alpha, Q, sigma_mut, duplic
     return fgm.fitness, fgm.nb_genes, path
 
 
+
 ####################
 #### Parameters ####
 ####################
 if __name__ == "__main__" :
-    n_traits = 50  # Number of traits in the phenotype space n
+    n_traits = 2  # Number of traits in the phenotype space n
     # initial_position = np.ones(n_traits)*5/np.sqrt(n_traits) # Quand la position initiale est plus éloigné de l'origine, la pop à bcp moins de mal à s'améliorer (et les mutations sont plus grandes ?)
     # problème : peut pas partir de très loin : si on augmente trop la position initial ça fait des divisions par 0 dans le log et plus rien ne marche
 
@@ -2366,7 +2403,7 @@ if __name__ == "__main__" :
     initial_position /= np.linalg.norm(initial_position)
     initial_position *= d
 
-    n_generations = 4*10**5  # Number of generations to simulate (pas vraiment, voir commentaire sur Nu)
+    n_generations = 4*10**4  # Number of generations to simulate (pas vraiment, voir commentaire sur Nu)
     r = 0.5 
     # sigma_mut = r/np.sqrt(n_traits) # Standard deviation of the mutation effect size # Tenaillon 2014
     sigma_mut = 0.01 # énormement de duplication/deletion par rapport au nombre de mutation quand on baisse sigma (voir sigma=0.01)
@@ -2381,39 +2418,42 @@ if __name__ == "__main__" :
     method = "semi_neutral"
     mutation_method = "always_all_gene"
 
+    fgm = FisherGeometricModel(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method)
+    fgm.evolve_successive(n_generations, mutation_method)
+    plot_2D_path(fgm)
     # Random simulation :
     # simulation(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method, mutation_method, n_generations)
 
-    # Cost of phenotypic complexity :
+    # # Cost of phenotypic complexity :
     # parallel_phenotypic_complexity(d, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method, mutation_method, n_generations, [2, 3, 5, 10, 30, 50, 100])
 
-    # Cost of Genotypic complexity :
+    # # Cost of Genotypic complexity :
     # genotypic_complexity(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, method, mutation_method, n_generations)
 
-    # Change in initial position :
+    # # Change in initial position :
     # optimum_distance(n_traits, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method, mutation_method, n_generations, [0.5, 1, 5, 10, 15, 20])
  
-    # Mutation rate effect :
-    # rate_of_mutation(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, ratio, method, "all_gene", n_generations, [10**(-4), 10**(-5), 10**(-6)])
+    # # Mutation rate effect :
+    # rate_of_mutation(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, ratio, method, "every_gene", n_generations, [10**(-4), 10**(-5), 10**(-6)])
 
-    # Rearrangement rate effect :
+    # # Rearrangement rate effect :
     # rate_of_rearrangement(n_traits, initial_position, alpha, Q, sigma_mut, mutation_rate, ratio, method, mutation_method, n_generations,[10**(-2), 10**(-3), 10**(-4)])
 
-    # Size of the gene effect :
+    # # Size of the gene effect :
     # ratio_gene_mutation(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, method, mutation_method, n_generations, [0.5, 1, 1.5, 2, 3, 5, 10])
 
-    # Size of the mutation effect :
+    # # Size of the mutation effect :
     # mutation_std(n_traits, initial_position, alpha, Q, duplication_rate, deletion_rate, mutation_rate, ratio, method, mutation_method, n_generations, [0.5, 0.1, 0.01, 0.001, 0.0001, 0.00001])
 
-    # Comparison of mutational techniques :
+    # # Comparison of mutational techniques :
     # mutations_technics(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method, mutation_method, n_generations)
 
-    # Test proportion of beneficial duplication 
+    # # Test proportion of beneficial duplication 
     # test_proportion(sigma_mut, ratio)
     # test_fixed_proportion(sigma_mut, ratio, 100, 20)
 
-    # Comparison of FGM and GFGM
+    # # Comparison of FGM and GFGM
     # parallel_version_comparison(alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, "semi_neutral", "always_all_gene", n_generations, [20, 50, 100], True)
 
-    # Historicity test
-    historic_simulation(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method, mutation_method, n_generations)
+    # # Historicity test
+    # historic_simulation(n_traits, initial_position, alpha, Q, sigma_mut, duplication_rate, deletion_rate, mutation_rate, ratio, method, mutation_method, n_generations)
