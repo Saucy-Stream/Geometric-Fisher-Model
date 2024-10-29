@@ -11,6 +11,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from multiprocessing import Pool
+import networkx as nx
+
 
 ##############################
 #### Functions definition ####
@@ -702,6 +704,18 @@ class FisherGeometricModel() :
 
         return
 
+    def get_graph(self) -> nx.Graph:
+        edges = [(f'gene {i}',f'trait {j}',{'weight' : abs(w[j])}) for (i,w) in enumerate(self.genes) for j in range(self.dimension)]
+        graph = nx.from_edgelist(edges)
+
+        return graph
+    
+    def get_modularity(self) -> list[set]:
+        graph = self.get_graph()
+        partition = nx.community.louvain_communities(graph)
+
+        return partition
+
     def historicity_test(self):
         """
         Resumes Evolution after the 10**5 generations to see if there are differences in
@@ -915,18 +929,18 @@ class FisherGeometricModel() :
 #### Parameters ####
 ####################p
 if __name__ == "__main__" :
-    n_traits = 10  # Number of traits in the phenotype space n
+    n_traits = 30  # Number of traits in the phenotype space n
     # initial_position = np.ones(n_traits)*5/np.sqrt(n_traits) # Quand la position initiale est plus éloigné de l'origine, la pop à bcp moins de mal à s'améliorer (et les mutations sont plus grandes ?)
     # problème : peut pas partir de très loin : si on augmente trop la position initial ça fait des divisions par 0 dans le log et plus rien ne marche
 
     # initial_position = np.zeros(n_traits)
     # initial_position[0] = 25 # Initial phenotype on an axe
 
-    d = 30 # Wanted initial distance to the optimum
+    d = 20 # Wanted initial distance to the optimum
     initial_position = np.random.normal(0, 1, n_traits)
     initial_position /= np.linalg.norm(initial_position)
     initial_position *= d
-    n_generations = 2*10**5  # Number of generations to simulate
+    n_generations = 2*10**4  # Number of generations to simulate
     # sigma_point = r/np.sqrt(n_traits) # Standard deviation of the mutation effect size # Tenaillon 2014
     sigma_point = 1 # énormement de duplication/deletion par rapport au nombre de mutation quand on baisse sigma (voir sigma=0.01)
     sigma_mult = 0.06
@@ -941,16 +955,28 @@ if __name__ == "__main__" :
     deletion_rate = 1e-2 # /gene/generation
     ratio = 1 # ratio between sigma_gene and sigma_point (size of the first gene) == importance of duplication versus mutation
 
-    initial_gene_method = "parallel"
+    initial_gene_method = "random"
     fgm = FisherGeometricModel(n_traits, initial_position, alpha, Q, sigma_point, duplication_rate, deletion_rate, point_rate, ratio, initial_gene_method, sigma_mult= sigma_mult, addition_rate= addition_rate, multiplication_rate = multiplication_rate)
     fgm.evolve_successive(n_generations)
     # print(f"Number of genes in time: {fgm.nb_genes}")
-    # print(f"Genes : {fgm.genzes}")
-    print(fgm.methods)
+    print(f"Genes : {fgm.genes}")
+    # print(fgm.methods)
     print(f"Number of [additions, duplications, deletions, point mutations] = {np.sum(fgm.methods,axis = 0)}")
     # print(f"Number of genes: {np.unique(fgm.nb_genes, return_counts=True)}")
-    print(f"Size of genes: {np.sort(np.linalg.norm(fgm.genes, axis = 1))}")
-    print(f"Inital beneficial directions: {fgm.initial_beneficial_directions}")
-    # fgm.plot_vizualised_path()
+    gene_sizes = np.linalg.norm(fgm.genes, axis = 1)
+    print(f"Size of genes: {np.sort(gene_sizes)}")
+    # print(f"Inital beneficial directions: {fgm.initial_beneficial_directions}")
     # fgm.ploting_size()
-    fgm.ploting_path()
+    # fgm.ploting_path()
+    partition = fgm.get_modularity()
+    print(partition)
+    print(f"Length of partition: {len(partition)}")
+    print(f"Initial position: {fgm.init_pos}")
+    graph : nx.Graph = fgm.get_graph()
+    weights = [graph.get_edge_data(*edge)['weight'] for edge in graph.edges]
+    # print(weights)
+    gene_nodes = [node for node in graph.nodes if node[0] == 'g']
+    nx.draw_networkx(
+    graph,
+    pos = nx.drawing.layout.bipartite_layout(graph, gene_nodes), width = weights)
+    plt.show()
