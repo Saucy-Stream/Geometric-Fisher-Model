@@ -9,6 +9,7 @@ Iterative version.
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import colors
 from matplotlib.lines import Line2D
 from multiprocessing import Pool
 import networkx as nx
@@ -19,7 +20,7 @@ import networkx as nx
 ##############################
 
 class FisherGeometricModel() :
-    def __init__(self, n: int, initial_position: list[float], alpha: float, Q: float = 2, sigma_point: float = 1, duplication_rate: float = 0.01, deletion_rate: float = 0.01, point_rate: float = 0.0001, ratio: float = 1, method: str = "random", timestamp : float = 1e5, sigma_mult : float = 0.1, addition_rate : float = 0.01, sigma_add : float = 0.1, multiplication_rate : float = 0.05) :
+    def __init__(self, n: int, initial_distance: float, alpha: float, Q: float = 2, sigma_point: float = 1, duplication_rate: float = 0.01, deletion_rate: float = 0.01, point_rate: float = 0.0001, ratio: float = 1, method: str = "random", timestamp : float = 1e5, sigma_mult : float = 0.1, addition_rate : float = 0.01, sigma_add : float = 0.1, multiplication_rate : float = 0.05) :
         """
         Initialized the main parameters and variables used in our modified FGM.
         
@@ -64,7 +65,7 @@ class FisherGeometricModel() :
         self.sigma_mult : float = sigma_mult
         self.sigma_add : float = sigma_add
 
-        self.init_pos : np.ndarray[float] = np.array(initial_position)
+        self.init_pos : np.ndarray[float] = self.create_initial_starting_position(initial_distance)
 
         self.genes : np.ndarray[np.ndarray[float]]= np.array([self.create_fixed_first_gene(ratio, method)]) # chose the direction/size of the first gene 
 
@@ -95,6 +96,12 @@ class FisherGeometricModel() :
         self.current_time = 1
         initial_signs = self.init_pos*self.genes[0]
         self.initial_beneficial_directions = np.sum([1 for i in range(n) if initial_signs[i] < 0])
+
+    def create_initial_starting_position(self, distance : float) -> list[float]:
+        initial_position = np.random.normal(0, 1, self.dimension)
+        initial_position /= np.linalg.norm(initial_position)
+        initial_position *= distance
+        return initial_position
 
     def create_fixed_first_gene(self, r: float, method: str):
         """
@@ -550,6 +557,22 @@ class FisherGeometricModel() :
             p = 0 # deleterious mutation do not fix
         return p
 
+    def evolve_until_fitness(self, fitness_limit: float) -> None:
+        time = self.current_time
+        while self.current_fitness < fitness_limit:
+            if time >= len(self.methods):
+                self.methods = np.concatenate((self.methods, np.full((time,4), fill_value= False)))
+                self.positions = np.concatenate((self.positions, np.zeros(shape = (time,self.dimension))))
+                self.mean_size = np.concatenate((self.mean_size, np.zeros(shape = time)))
+                self.std_size = np.concatenate((self.std_size, np.zeros(shape = time)))
+                self.fitness = np.concatenate((self.fitness, np.zeros(shape = time)))
+                self.nb_genes = np.concatenate((self.nb_genes, np.zeros(shape = time)))
+            self.simulation_step(time)
+
+            time += 1
+        self.current_time = time
+        return
+
     def evolve_successive(self, time_step : int) : # 20 sec
         """
         Main method that simulate the evolution for a certain time. 
@@ -579,6 +602,7 @@ class FisherGeometricModel() :
         
         """
 
+        #Add extra space to the different vectors so they can fit new simulation data
         self.methods = np.concatenate((self.methods, np.full((time_step,4), fill_value= False)))
         self.positions = np.concatenate((self.positions, np.zeros(shape = (time_step,self.dimension))))
         self.mean_size = np.concatenate((self.mean_size, np.zeros(shape = time_step)))
@@ -594,38 +618,39 @@ class FisherGeometricModel() :
                 self.timestamp_fitness = self.fitness.copy()
                 self.timestamp_position = self.current_pos.copy()
                 self.timestamp_genes = self.genes.copy()
-
-            print(f"Generation: {t}", end = "\r")
-
-            multiplied_genes, multiplication_occurred = self.multiplicative_point_mutation(self.genes)
-
-            added_genes, addition_occurred = self.add_random_genes(multiplied_genes)
             
-            duplicated_genes, duplication_occured = self.duplication(added_genes) # test if there are some duplications to do
+            self.simulation_step(time)
 
-            deleted_genes, deletion_occurred = self.deletion(duplicated_genes) # test if there are some deletions to do
             
-
-            #point_genes, point_ocurred = self.addative_point_mutation(deleted_genes) 
-            
-            
-            
-            final_genes = deleted_genes
-            if self.fixation_check(final_genes):
-                self.fixation(final_genes)
-                self.methods[time] = np.array([addition_occurred,duplication_occured,deletion_occurred,multiplication_occurred])
-            else:
-                self.methods[time] = np.array([False,False,False,False])
-
-            self.fitness[time] = self.current_fitness
-            self.nb_genes[time] = len(self.genes)
-            self.positions[time] = (self.current_pos)
-            sizes = np.linalg.norm(self.genes, axis = 1)
-            self.mean_size[time] = np.mean(sizes)
-            self.std_size[time] = np.std(sizes)
 
         self.current_time = time
-    
+
+    def simulation_step(self, time : int) -> None:
+        # print(f"Generation: {time}", end = "\r")
+
+        multiplied_genes, multiplication_occurred = self.multiplicative_point_mutation(self.genes)
+        added_genes, addition_occurred = self.add_random_genes(multiplied_genes)
+        duplicated_genes, duplication_occured = self.duplication(added_genes) # test if there are some duplications to do
+        deleted_genes, deletion_occurred = self.deletion(duplicated_genes) # test if there are some deletions to do
+
+        #point_genes, point_ocurred = self.addative_point_mutation(deleted_genes) 
+            
+        final_genes = deleted_genes
+        if self.fixation_check(final_genes):
+            self.fixation(final_genes)
+            self.methods[time] = np.array([addition_occurred,duplication_occured,deletion_occurred,multiplication_occurred])
+        else:
+            self.methods[time] = np.array([False,False,False,False])
+
+        self.fitness[time] = self.current_fitness
+        self.nb_genes[time] = len(self.genes)
+        self.positions[time] = (self.current_pos)
+        sizes = np.linalg.norm(self.genes, axis = 1)
+        self.mean_size[time] = np.mean(sizes)
+        self.std_size[time] = np.std(sizes)
+
+        return
+
     def pick_mutation_type(self) -> str:
         """
         Randomly selects which mutation event that will occurr during a generation
@@ -678,7 +703,7 @@ class FisherGeometricModel() :
             
             return False
 
-    def fixation(self,new_genes : np.ndarray[np.ndarray[float]], display : bool = True) -> None:
+    def fixation(self,new_genes : np.ndarray[np.ndarray[float]], display : bool = False) -> None:
         """
         Fixates the parameter new_genes as the new genome
         
@@ -705,12 +730,12 @@ class FisherGeometricModel() :
         return
 
     def get_graph(self) -> nx.Graph:
-        edges = [(f'gene {i}',f'trait {j}',{'weight' : abs(w[j])}) for (i,w) in enumerate(self.genes) for j in range(self.dimension)]
+        edges = [(f'gene {i}',f'trait {j}',{'weight' : w[j]}) for (i,w) in enumerate(self.genes) for j in range(self.dimension)]
         graph = nx.from_edgelist(edges)
 
         return graph
     
-    def get_modularity(self) -> list[set]:
+    def get_communities(self) -> list[set]:
         graph = self.get_graph()
         partition = nx.community.louvain_communities(graph)
 
@@ -924,23 +949,95 @@ class FisherGeometricModel() :
         ax2.grid()
         plt.show()
 
+def draw_gene_trait_plot(graph : nx.Graph) -> None:
+    fig = plt.figure(figsize = (16,9))
+    ax = plt.subplot()
+
+    partition = nx.community.louvain_communities(graph)
+
+    nb_genes = len([node for node in graph.nodes if node[0] == 'g'])
+    nb_traits = len([node for node in graph.nodes if node[0] == 't'])
+    trait_factor = (nb_genes-1)/(nb_traits-1)
+
+    genes_ordered = np.array([])
+    traits_ordered = np.array([])
+    community_divider_genes = 0
+    community_divider_traits = 0
+    for community in partition:
+        genes = np.array([node for node in community if node[0] == 'g'])
+        traits = np.array([node for node in community if node[0] == 't'])
+        genes_ordered = np.concatenate((genes_ordered,genes))
+        traits_ordered = np.concatenate((traits_ordered,traits))
+
+        #plot divisor lines between communities
+        community_divider_genes += len(genes)
+        community_divider_traits += len(traits)
+        ax.plot((0,10),(community_divider_genes-0.5,(community_divider_traits-0.5)*trait_factor),c = 'k')
+
+
+    gene_x_positions = np.full(nb_genes, 0)
+    gene_y_positions = range(nb_genes)
+    trait_x_positions = np.full(nb_traits, 10)
+    trait_y_positions = np.array(range(nb_traits))*trait_factor
+
+    weights = np.array([graph.get_edge_data(*edge)['weight'] for edge in graph.edges])
+    largest_weight = max(weights)
+            
+    for i, gene in enumerate(genes_ordered):
+        for j,trait in enumerate(traits_ordered):
+            weight = graph.get_edge_data(gene,trait)['weight']
+            alpha = abs(weight)/largest_weight
+            if weight > 0:
+                color = 'g'
+            else:
+                color = 'r'
+            if alpha >= 0:
+                ax.plot((0,10),(i,j*(nb_genes-1)/(nb_traits-1)),c = color,alpha = alpha)
+    
+    
+    ax.scatter(gene_x_positions,gene_y_positions)
+    ax.scatter(trait_x_positions,trait_y_positions)
+
+    plt.show()
+
+    return
+
+def draw_fixation_gene_plot(ns: list[int], initial_distance : float = 10, fitness_limit : float= 0.99, nb_tests : int = 10, alpha: float = 0.5, Q: float = 2, sigma_point: float = 1, duplication_rate: float = 0.01, deletion_rate: float = 0.01, point_rate: float = 0.0001, ratio: float = 1, initial_gene_method: str = "random", sigma_mult : float = 0.1, addition_rate : float = 0.01, sigma_add : float = 0.1, multiplication_rate : float = 0.05) -> None:
+    nb_genes = np.zeros(shape = (len(ns), nb_tests))
+    fixation_times = np.zeros(shape = (len(ns), nb_tests))
+
+    for i,n in enumerate(ns):
+        for j in range(nb_tests):
+            fgm = FisherGeometricModel(n,initial_distance, alpha, Q, sigma_point, duplication_rate, deletion_rate, point_rate, ratio, initial_gene_method, sigma_mult= sigma_mult, addition_rate= addition_rate, multiplication_rate = multiplication_rate)
+            fgm.evolve_until_fitness(fitness_limit = fitness_limit)
+            nb_genes[i,j] = len(fgm.genes)
+            fixation_times[i,j] = fgm.current_time
+        print(f"Dimension {n} done!")
+    
+    fig = plt.figure(figsize= (16,9))
+    ax = plt.subplot()
+    ax.set_xlabel("Number of dimensions")
+    ax.set_ylabel("Time until fixation")
+    ax.set_title(f"Plot of simulations reaching a fitness of {fitness_limit}")
+    ax.set_yscale('log')
+    ax.grid()
+
+    X = np.tile(ns, (nb_tests,1))
+
+    cmap = plt.cm.viridis
+    scatter = ax.scatter(X.flatten(),fixation_times.flatten(),c = nb_genes.flatten(), cmap = cmap, linewidths= 5)
+    cbar = fig.colorbar(scatter, ax=ax, label='Normalized number of genes')
+
+    plt.show()
+    return
 
 ####################
 #### Parameters ####
 ####################p
 if __name__ == "__main__" :
-    n_traits = 30  # Number of traits in the phenotype space n
-    # initial_position = np.ones(n_traits)*5/np.sqrt(n_traits) # Quand la position initiale est plus éloigné de l'origine, la pop à bcp moins de mal à s'améliorer (et les mutations sont plus grandes ?)
-    # problème : peut pas partir de très loin : si on augmente trop la position initial ça fait des divisions par 0 dans le log et plus rien ne marche
-
-    # initial_position = np.zeros(n_traits)
-    # initial_position[0] = 25 # Initial phenotype on an axe
-
-    d = 20 # Wanted initial distance to the optimum
-    initial_position = np.random.normal(0, 1, n_traits)
-    initial_position /= np.linalg.norm(initial_position)
-    initial_position *= d
-    n_generations = 2*10**4  # Number of generations to simulate
+    n_traits = 50  # Number of traits in the phenotype space n
+    distance = 20 # initial distance to the optimum
+    n_generations = 5*10**4  # Number of generations to simulate
     # sigma_point = r/np.sqrt(n_traits) # Standard deviation of the mutation effect size # Tenaillon 2014
     sigma_point = 1 # énormement de duplication/deletion par rapport au nombre de mutation quand on baisse sigma (voir sigma=0.01)
     sigma_mult = 0.06
@@ -956,27 +1053,27 @@ if __name__ == "__main__" :
     ratio = 1 # ratio between sigma_gene and sigma_point (size of the first gene) == importance of duplication versus mutation
 
     initial_gene_method = "random"
-    fgm = FisherGeometricModel(n_traits, initial_position, alpha, Q, sigma_point, duplication_rate, deletion_rate, point_rate, ratio, initial_gene_method, sigma_mult= sigma_mult, addition_rate= addition_rate, multiplication_rate = multiplication_rate)
-    fgm.evolve_successive(n_generations)
-    # print(f"Number of genes in time: {fgm.nb_genes}")
-    print(f"Genes : {fgm.genes}")
-    # print(fgm.methods)
-    print(f"Number of [additions, duplications, deletions, point mutations] = {np.sum(fgm.methods,axis = 0)}")
-    # print(f"Number of genes: {np.unique(fgm.nb_genes, return_counts=True)}")
-    gene_sizes = np.linalg.norm(fgm.genes, axis = 1)
-    print(f"Size of genes: {np.sort(gene_sizes)}")
-    # print(f"Inital beneficial directions: {fgm.initial_beneficial_directions}")
-    # fgm.ploting_size()
-    # fgm.ploting_path()
-    partition = fgm.get_modularity()
-    print(partition)
-    print(f"Length of partition: {len(partition)}")
-    print(f"Initial position: {fgm.init_pos}")
-    graph : nx.Graph = fgm.get_graph()
-    weights = [graph.get_edge_data(*edge)['weight'] for edge in graph.edges]
-    # print(weights)
-    gene_nodes = [node for node in graph.nodes if node[0] == 'g']
-    nx.draw_networkx(
-    graph,
-    pos = nx.drawing.layout.bipartite_layout(graph, gene_nodes), width = weights)
-    plt.show()
+
+    if True:
+        ns = range(2,25,2)
+        tests = 10
+        fitness_limit = 0.90
+        draw_fixation_gene_plot(ns, nb_tests = tests, fitness_limit= fitness_limit)
+    
+    if False:
+        fgm = FisherGeometricModel(n_traits, distance, alpha, Q, sigma_point, duplication_rate, deletion_rate, point_rate, ratio, initial_gene_method, sigma_mult= sigma_mult, addition_rate= addition_rate, multiplication_rate = multiplication_rate)
+        fgm.evolve_successive(n_generations)
+        # print(f"Number of genes in time: {fgm.nb_genes}")
+        # print(f"Genes : {fgm.genes}")
+        # print(fgm.methods)
+        # print(f"Number of [additions, duplications, deletions, point mutations] = {np.sum(fgm.methods,axis = 0)}")
+        # print(f"Number of genes: {np.unique(fgm.nb_genes, return_counts=True)}")
+        # gene_sizes = np.linalg.norm(fgm.genes, axis = 1)
+        # print(f"Size of genes: {np.sort(gene_sizes)}")
+        # print(f"Inital beneficial directions: {fgm.initial_beneficial_directions}")
+        # fgm.ploting_size()
+        # fgm.ploting_path()
+        graph = fgm.get_graph()
+        draw_gene_trait_plot(graph=graph)
+
+   
