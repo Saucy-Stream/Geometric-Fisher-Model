@@ -368,10 +368,16 @@ class FisherGeometricModel() :
         """
         new_genes = current_genes.copy()
         n = len(new_genes)
-        m = np.random.lognormal(0,self.multiplication_rate, size = (n, self.dimension))
-        # m = np.random.exponential(1, size = (n, self.dimension))
-        new_genes = [new_genes[i] * m[i] for i in range(n)] # modify every genes in the list by adding the corresponding mutation. All genes do not mutate the same way
-        # print(f"1st gene: {self.genes[0]}, mutation: {m[0]}")
+        mutation_dirs = np.random.normal(0,1, size = (n, self.dimension))
+
+        mutation_dirs = (mutation_dirs.T/np.linalg.norm(mutation_dirs, axis = 1)).T
+        mutation_sizes = abs(np.random.normal(1,self.sigma_mult, size = n))
+        for i,gene in enumerate(new_genes):
+            size = np.linalg.norm(gene)*mutation_sizes[i]
+            dir = gene+mutation_dirs[i]/100
+            # print(size,gene, dir, size*dir/np.linalg.norm(dir))
+            new_genes[i] = size*dir/np.linalg.norm(dir)
+
         mut = True
         return new_genes, mut
     
@@ -587,7 +593,7 @@ class FisherGeometricModel() :
         """
 
         #Add extra space to the different vectors so they can fit new simulation data
-        self.methods = np.concatenate((self.methods, np.full((time_step,4), fill_value= False)))
+        self.methods = np.concatenate((self.methods, np.full((time_step,len(self.mutation_functions)), fill_value= False)))
         self.positions = np.concatenate((self.positions, np.zeros(shape = (time_step,self.dimension))))
         self.mean_size = np.concatenate((self.mean_size, np.zeros(shape = time_step)))
         self.std_size = np.concatenate((self.std_size, np.zeros(shape = time_step)))
@@ -613,14 +619,19 @@ class FisherGeometricModel() :
 
         mutated_genes = self.genes
         mutation_occured = np.full(len(self.mutation_functions), fill_value= False)
+        any_fixation = False
         for i, mutation in enumerate(self.mutation_functions):
-            mutated_genes, mutation_occured[i] = mutation(mutated_genes)
+            mutated_genes, mut = mutation(self.genes)
+            if  mut and self.fixation_check(mutated_genes):
+                # print(mutation)
+                any_fixation = True
+                self.fixation(mutated_genes)
+                mutation_occured[i] = mut
         
-        if self.fixation_check(mutated_genes):
-            self.fixation(mutated_genes)
+        if any_fixation:
             self.methods[time] = np.array(mutation_occured)
         else:
-            self.methods[time] = np.array([False,False,False,False])
+            self.methods[time] = np.array(np.full(len(self.mutation_functions),False))
 
         self.fitness[time] = self.current_fitness
         self.nb_genes[time] = len(self.genes)
@@ -651,6 +662,11 @@ class FisherGeometricModel() :
         new_pos = self.init_pos + np.sum(new_genes, axis = 0)
 
         new_fitness  = self.fitness_calc(new_pos) # its new fitness
+        if new_fitness > self.current_fitness:
+            return True
+        else:
+            return False
+        
         s = self.fitness_effect(self.current_fitness, new_fitness) # the fitness effect of the modification
         prob = self.fixation_probability(s) # its fixation probality depending on its fitness effect
 
@@ -669,15 +685,12 @@ class FisherGeometricModel() :
         
         Parameters
         -----
-        new_genes : np.ndarray[list[float]]
+        new_genes : np.ndarray[np.ndarray[float]]
             The genes to be fixated
-        display : bool, optional
-            If True, prints that a new genome has been fixed. Default is True
         
         Returns
         -----
         None
-            If display == True will print that a new genome has been fixated and its fitness.
 
         """
         self.genes = new_genes
@@ -709,28 +722,28 @@ class FisherGeometricModel() :
 if __name__ == "__main__":
     #Save a FisherGeometricObjectModel to the file FisherObject.pkl
 
-    dimension = 3  # Number of traits in the phenotype space n
+    dimension = 30  # Number of traits in the phenotype space n
     initial_distance = 10 # initial distance to the optimum
     # sigma_point = r/np.sqrt(n_traits) # Standard deviation of the mutation effect size # Tenaillon 2014
     sigma_point = 0.01 # énormement de duplication/deletion par rapport au nombre de mutation quand on baisse sigma (voir sigma=0.01)
-    sigma_mult = 0.06
+    sigma_mult = 0.1
     alpha = 1/2
     Q = 2
 
-    multiplication_rate = 5e-2
+    multiplication_rate = 5e-1
     addition_rate = 1e-2
     point_rate = 1e-4 # rate of mutation mu
     duplication_rate = 1e-2 # /gene/generation
     deletion_rate = 1e-2 # /gene/generation
 
-    initial_gene_method = "parallel"
-    mutation_methods : list[str] = ["multiplication","addition", "duplication", "deletion"]
+    initial_gene_method = "random"
+    mutation_methods : list[str] = ["multiplication", "duplication", "deletion"]
 
     display_fixation = True
     fgm_args = {'display_fixation':display_fixation, 'n': dimension, 'initial_distance': initial_distance, 'mutation_methods': mutation_methods, 'sigma_point': sigma_point,  'duplication_rate': duplication_rate, 'deletion_rate': deletion_rate, 'point_rate': point_rate, 'initial_gene_method': initial_gene_method, 'sigma_mult': sigma_mult, 'addition_rate': addition_rate, 'multiplication_rate': multiplication_rate}
     fgm = FisherGeometricModel(**fgm_args)
 
-    n_generations = 5*10**4
+    n_generations = 1*10**4
     fgm.evolve_successive(n_generations)
     with open('FisherObject', 'wb') as output:
         pickle.dump(fgm, output, pickle.HIGHEST_PROTOCOL)

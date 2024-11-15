@@ -80,24 +80,24 @@ def plotting_results(fgm : FisherGeometricModel, fitness, effects, time):
         (show the graphs in an other window)
         
     """
-    plt.figure()
+    fig = plt.figure()
 
     ax1 = plt.subplot(1, 2, 1)
     ax1.plot(fitness)
-    ax1.xlabel('Time')
-    ax1.ylabel('Fitness')
-    ax1.title('Evolution of Fitness Over Time')
+    ax1.set_xlabel('Time')
+    ax1.set_ylabel('Fitness')
+    ax1.set_title('Evolution of Fitness Over Time')
 
-    plt.subplot(1, 2, 2)
+    ax2 = plt.subplot(1, 2, 2)
     effects = np.array(effects)
     effects = effects[effects>=0] # comment this lign if you also want to see deleterious effect
-    plt.plot(effects, '.', markersize=3)
-    plt.hlines(0, 0 , len(effects), "k", "--")
-    plt.xlabel('Time')
-    plt.ylabel('Fitness Effect (s)')
-    plt.title('Fitness Effects of Mutations Over Time')
+    ax2.plot(effects, '.', markersize=3)
+    ax2.hlines(0, 0 , len(effects), "k", "--")
+    ax2.set_xlabel('Time')
+    ax2.set_ylabel('Fitness Effect (s)')
+    ax2.set_title('Fitness Effects of Mutations Over Time')
 
-    plt.show()
+    return fig
 
 def plotting_path(fgm : FisherGeometricModel):
     """
@@ -117,14 +117,15 @@ def plotting_path(fgm : FisherGeometricModel):
         
     """
     path = np.linalg.norm(fgm.positions,axis = 1)
-    plt.figure(figsize = (16,9))
-    plt.plot(path)
-    plt.xlabel('Time')
-    plt.ylabel('Distance to the optimum')
-    plt.title('Evolution of the Distance to the Optimum of Phenotype after each Fixed Mutation')
-    plt.loglog()
-    plt.grid()
-    plt.show()
+    fig = plt.figure(figsize = (10,4))
+    ax = fig.add_subplot()
+    ax.plot(path)
+    ax.set_xlabel('Time')
+    ax.set_ylabel('Distance to the optimum')
+    ax.set_title('Evolution of the Distance to the Optimum of Phenotype after each Fixed Mutation')
+    ax.loglog()
+    ax.grid()
+    return fig
 
 def plot_vizualised_path(fgm : FisherGeometricModel) -> None:
     """
@@ -140,7 +141,7 @@ def plot_vizualised_path(fgm : FisherGeometricModel) -> None:
         Plots path
     """
 
-    fig = plt.figure(figsize = (16,9))
+    fig = plt.figure(figsize = (10,4))
     if fgm.dimension == 2:
         ax = fig.add_subplot()
         for radius in [2,5,10,15,20,30]:
@@ -154,6 +155,16 @@ def plot_vizualised_path(fgm : FisherGeometricModel) -> None:
     else:
         raise Warning("Unable to plot a graph when dimensions > 3")
     
+    unique_positions = np.array([pos for i,pos in enumerate(fgm.positions) if sum(fgm.methods[i])>0])
+
+    prev_pos = unique_positions[0]
+    for pos in unique_positions[1:]:
+        line = np.array([prev_pos,pos]).T
+        ax.plot(*line, c = 'r')
+        prev_pos = pos
+
+    ax.scatter(*unique_positions.T,c = "r")
+
     number_of_genes = np.shape(fgm.genes)[0]
     genome = np.resize(fgm.genes.copy(),(number_of_genes,fgm.dimension))
 
@@ -168,7 +179,7 @@ def plot_vizualised_path(fgm : FisherGeometricModel) -> None:
 
     ax.scatter(*origin, c = 'k')        
     ax.grid()
-    plt.show()
+    return fig
 
 def plotting_size(fgm : FisherGeometricModel):
     """
@@ -197,7 +208,7 @@ def plotting_size(fgm : FisherGeometricModel):
 
     x = np.arange(0, fgm.current_time) # abscisse for the confidence intervals to be plotted
 
-    plt.figure(figsize= (16,9))
+    fig = plt.figure(figsize= (10,4))
 
     ax1 = plt.subplot(1, 2, 1)
     ax1.plot(fgm.nb_genes)
@@ -213,10 +224,11 @@ def plotting_size(fgm : FisherGeometricModel):
     ax2.set_ylabel('Mean size of genes in the genotype')
     ax2.set_title('Evolution of the size of genes with Time')
     ax2.grid()
-    plt.show()
+    
+    return fig
 
 def draw_gene_trait_graph(fgm : FisherGeometricModel) -> None:
-    fig = plt.figure(figsize = (16,9))
+    fig = plt.figure(figsize = (10,4))
     ax = plt.subplot()
 
     graph = fgm.get_graph()
@@ -275,59 +287,77 @@ def draw_fixation_gene_plot(fgm_args : dict, ns: list[int], fitness_limit : floa
 
     nb_genes = np.zeros(shape = (len(ns), nb_tests))
     fixation_times = np.zeros(shape = (len(ns), nb_tests))
+    nb_communities = np.zeros(shape = (len(ns),nb_tests))
 
     for i,n in enumerate(ns):
+        s = 0
         for j in range(nb_tests):
             fgm = FisherGeometricModel(n, **fgm_args)
             fgm.evolve_until_fitness(fitness_limit = fitness_limit)
             nb_genes[i,j] = len(fgm.genes)
             fixation_times[i,j] = fgm.current_time
+            communities = len(fgm.get_communities())
+            s += communities
+            print(f"Nr of communities in dim {n}, test {j}: {communities}")
+        nb_communities[i] = s/nb_tests
         print(f"Dimension {n} done!")
-    
-    fig = plt.figure(figsize= (16,9))
-    ax = plt.subplot()
-    ax.set_xlabel("Number of dimensions")
-    ax.set_ylabel("Time until fixation")
-    ax.set_title(f"Plot of simulations reaching a fitness of {fitness_limit}")
-    ax.set_yscale('log')
-    ax.grid()
+    # print(f"Average number of communities for dimensions {ns}: {nb_communities}")
+
+    fig = plt.figure(figsize= (10,4))
+    axs = plt.subplots(1,2)
+    ax1 = axs[0]
+    ax2 = axs[1]
+    ax1.set_xlabel("Number of dimensions")
+    ax1.set_ylabel("Time until fixation")
+    ax1.set_title(f"Simulations reaching a fitness of {fitness_limit}")
+    ax1.set_yscale('log')
+    ax1.grid()
+
+    ax2.set_xlabel("Number of dimensions")
+    ax2.set_ylabel("Number of communities")
+    ax2.set_title(f"Number of communities for different dimensions n")
+    ax2.grid()
 
     X = np.tile(ns, (nb_tests,1))
 
     cmap = plt.cm.viridis
-    scatter = ax.scatter(X.flatten(),fixation_times.flatten(),c = nb_genes.flatten(), cmap = cmap, linewidths= 5)
-    cbar = fig.colorbar(scatter, ax=ax, label='Number of genes at fixation')
+    scatter = ax1.scatter(X.flatten(), fixation_times.flatten(), c = nb_genes.flatten(), cmap = cmap, linewidths= 5)
+    cbar = fig.colorbar(scatter, ax=ax1, label='Number of genes at fixation')
 
+    ax2.scatter(X.flatten(), nb_communities.flatten(), c = 'b', label = "Simulations")
+    ax2.scatter(ns, np.mean(nb_communities,axis= 1), c = 'r', label = "Means")
+    ax2.legend()
+    
     # print(nb_genes)
     plt.show()
     return
 
 if __name__ == "__main__":
     with open('FisherObject', 'rb') as input:
-        fgm = pickle.load(input)
+        fgm :FisherGeometricModel = pickle.load(input)
 
     if False:
         args = fgm.get_args()
         args.pop('n')
         args["display_fixation"] = False
-        ns = range(1,17,1)
+        ns = range(20,30,1)
         nb_tests = 10
-        fitness_limit = 0.95
+        fitness_limit = 0.9
         draw_fixation_gene_plot(args, ns = ns, nb_tests = nb_tests, fitness_limit= fitness_limit)
     
     if True:
         # print(f"Number of genes in time: {fgm.nb_genes}")
-        # print(f"Genes : {fgm.genes}")
         # print(fgm.methods)
-        # print(f"Number of [additions, duplications, deletions, point mutations] = {np.sum(fgm.methods,axis = 0)}")
+        print(f"Number of {fgm.get_args()['mutation_methods']} = {np.sum(fgm.methods,axis = 0)}")
         # print(f"Number of genes: {np.unique(fgm.nb_genes, return_counts=True)}")
-        # gene_sizes = np.linalg.norm(fgm.genes, axis = 1)
-        # print(f"Size of genes: {np.sort(gene_sizes)}")
-        # print(f"Inital beneficial directions: {fgm.initial_beneficial_directions}")
+        gene_sizes = np.linalg.norm(fgm.genes, axis = 1)
+        print(f"Size of genes: {np.sort(gene_sizes)}")
+        print(f"Inital beneficial directions: {fgm.initial_beneficial_directions}")
+        print(f"Genes : {fgm.genes}")
         print(f"Initial position: {fgm.init_pos}")
         plotting_size(fgm)
         plotting_path(fgm)
-        plot_vizualised_path(fgm)
+        # plot_vizualised_path(fgm)
         draw_gene_trait_graph(fgm)
-
+    plt.show()
     
