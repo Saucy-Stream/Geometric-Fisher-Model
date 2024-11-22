@@ -14,6 +14,7 @@ from matplotlib.lines import Line2D
 from multiprocessing import Pool
 import networkx as nx
 import pickle
+import json
 
 
 ##############################
@@ -21,7 +22,7 @@ import pickle
 ##############################
 
 class FisherGeometricModel() :
-    def __init__(self, n: int = 3, initial_distance: float = 20, mutation_methods : list[str] = ["multiplication","addition", "duplication", "deletion"], alpha: float = 0.5, Q: float = 2, sigma_point: float = 1, duplication_rate: float = 0.01, deletion_rate: float = 0.01, point_rate: float = 0.0001, ratio: float = 1, initial_gene_method: str = "random", timestamp : float = 1e5, sigma_mult : float = 0.1, addition_rate : float = 0.01, sigma_add : float = 0.1, multiplication_rate : float = 0.05, display_fixation : bool = False) :
+    def __init__(self, n: int = 3, initial_distance: float = 20, mutation_methods : list[str] = ["multiplication","addition", "duplication", "deletion"], alpha: float = 0.5, Q: float = 2, sigma_point: float = 1, duplication_rate: float = 0.01, deletion_rate: float = 0.01, ratio: float = 1, initial_gene_method: str = "random", timestamp : float = 1e5, sigma_mult : float = 0.1, addition_rate : float = 0.01, sigma_add : float = 0.1, display_fixation : bool = False) :
         """
         Initialized the main parameters and variables used in our modified FGM.
         
@@ -45,8 +46,6 @@ class FisherGeometricModel() :
             Rate of duplication in nb/gene/generation
         deletion_rate
             Rate of deletion in nb/gene/generation 
-        point_rate
-            Rate of mutation in nb/genome/generation
         initial_gene_method
             Method of choosing the initial gene
         timestamp
@@ -71,11 +70,9 @@ class FisherGeometricModel() :
         self.current_pos = self.init_pos + np.sum(self.genes, axis = 0) # the real phenotypic position of the individual is computed by adding the genes vectors to the initial position
         self.current_fitness = self.fitness_calc(self.current_pos) # Compute the fitness of the actual phenotype before any mutation happen
 
-        self.multiplication_rate = multiplication_rate
         self.addition_rate = addition_rate
         self.duplication_rate = duplication_rate 
         self.deletion_rate = deletion_rate
-        self.point_rate = point_rate
 
         self.mutation_functions = np.array([None]*len(mutation_methods))
         for i,method in enumerate(mutation_methods):
@@ -113,7 +110,7 @@ class FisherGeometricModel() :
         self.initial_beneficial_directions = np.sum([1 for i in range(n) if initial_signs[i] < 0])
         self.display_fixation = display_fixation
 
-        self.args = {'n': n, 'initial_distance': initial_distance, 'mutation_methods': mutation_methods, 'alpha' : alpha, 'Q' : Q, 'sigma_point': sigma_point,  'duplication_rate': duplication_rate, 'deletion_rate': deletion_rate, 'point_rate': point_rate, 'initial_gene_method': initial_gene_method, 'timestamp': timestamp, 'sigma_mult': sigma_mult, 'addition_rate': addition_rate, 'multiplication_rate': multiplication_rate, 'sigma_add' : sigma_add, 'multiplication_rate' : multiplication_rate, 'display_fixation':display_fixation}
+        self.args = {'n': n, 'initial_distance': initial_distance, 'mutation_methods': mutation_methods, 'alpha' : alpha, 'Q' : Q, 'sigma_point': sigma_point,  'duplication_rate': duplication_rate, 'deletion_rate': deletion_rate, 'initial_gene_method': initial_gene_method, 'timestamp': timestamp, 'sigma_mult': sigma_mult, 'addition_rate': addition_rate, 'sigma_add' : sigma_add, 'display_fixation':display_fixation}
     
     def get_args(self):
         return self.args.copy()
@@ -368,16 +365,15 @@ class FisherGeometricModel() :
         """
         new_genes = current_genes.copy()
         n = len(new_genes)
-        mutation_dirs = np.random.normal(0,1, size = (n, self.dimension))
+        variance = [[self.sigma_mult*abs(direction)**(-1/2) for direction in gene] for gene in new_genes]
+        mutations = np.random.normal(1,variance, size = (n, self.dimension))
 
-        mutation_dirs = (mutation_dirs.T/np.linalg.norm(mutation_dirs, axis = 1)).T
-        mutation_sizes = abs(np.random.normal(1,self.sigma_mult, size = n))
-        for i,gene in enumerate(new_genes):
-            size = np.linalg.norm(gene)*mutation_sizes[i]
-            dir = gene+mutation_dirs[i]/100
-            # print(size,gene, dir, size*dir/np.linalg.norm(dir))
-            new_genes[i] = size*dir/np.linalg.norm(dir)
-
+        # if any(mutations.flatten() < 0):
+        #     flips = [i for i,mut in enumerate(mutations.flatten()) if mut<0]
+        #     print(f"flipped genes: {new_genes.flatten()[flips]}, mutations: {mutations.flatten()[flips]}")
+        
+        new_genes *= mutations
+        
         mut = True
         return new_genes, mut
     
@@ -551,7 +547,7 @@ class FisherGeometricModel() :
         time = self.current_time
         while self.current_fitness < fitness_limit:
             if time >= len(self.methods):
-                self.methods = np.concatenate((self.methods, np.full((time,4), fill_value= False)))
+                self.methods = np.concatenate((self.methods, np.full((time,len(self.mutation_functions)), fill_value= False)))
                 self.positions = np.concatenate((self.positions, np.zeros(shape = (time,self.dimension))))
                 self.mean_size = np.concatenate((self.mean_size, np.zeros(shape = time)))
                 self.std_size = np.concatenate((self.std_size, np.zeros(shape = time)))
@@ -722,17 +718,15 @@ class FisherGeometricModel() :
 if __name__ == "__main__":
     #Save a FisherGeometricObjectModel to the file FisherObject.pkl
 
-    dimension = 30  # Number of traits in the phenotype space n
-    initial_distance = 10 # initial distance to the optimum
+    dimension = 3  # Number of traits in the phenotype space n
+    initial_distance = 20 # initial distance to the optimum
     # sigma_point = r/np.sqrt(n_traits) # Standard deviation of the mutation effect size # Tenaillon 2014
     sigma_point = 0.01 # énormement de duplication/deletion par rapport au nombre de mutation quand on baisse sigma (voir sigma=0.01)
-    sigma_mult = 0.1
+    sigma_mult = 0.05
     alpha = 1/2
     Q = 2
 
-    multiplication_rate = 5e-1
     addition_rate = 1e-2
-    point_rate = 1e-4 # rate of mutation mu
     duplication_rate = 1e-2 # /gene/generation
     deletion_rate = 1e-2 # /gene/generation
 
@@ -740,7 +734,7 @@ if __name__ == "__main__":
     mutation_methods : list[str] = ["multiplication", "duplication", "deletion"]
 
     display_fixation = True
-    fgm_args = {'display_fixation':display_fixation, 'n': dimension, 'initial_distance': initial_distance, 'mutation_methods': mutation_methods, 'sigma_point': sigma_point,  'duplication_rate': duplication_rate, 'deletion_rate': deletion_rate, 'point_rate': point_rate, 'initial_gene_method': initial_gene_method, 'sigma_mult': sigma_mult, 'addition_rate': addition_rate, 'multiplication_rate': multiplication_rate}
+    fgm_args = {'display_fixation':display_fixation, 'n': dimension, 'initial_distance': initial_distance, 'mutation_methods': mutation_methods, 'sigma_point': sigma_point,  'duplication_rate': duplication_rate, 'deletion_rate': deletion_rate, 'initial_gene_method': initial_gene_method, 'sigma_mult': sigma_mult, 'addition_rate': addition_rate}
     fgm = FisherGeometricModel(**fgm_args)
 
     n_generations = 1*10**4

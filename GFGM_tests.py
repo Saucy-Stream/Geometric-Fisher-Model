@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 from matplotlib import colors
 import pickle
-
+import json
 
 
 def historicity_test(fgm : FisherGeometricModel):
@@ -141,8 +141,9 @@ def plot_vizualised_path(fgm : FisherGeometricModel) -> None:
         Plots path
     """
 
-    fig = plt.figure(figsize = (10,4))
+    
     if fgm.dimension == 2:
+        fig = plt.figure(figsize = (10,4))
         ax = fig.add_subplot()
         for radius in [2,5,10,15,20,30]:
             circ = plt.Circle((0,0),radius, fill = False, color = 'k')
@@ -150,10 +151,12 @@ def plot_vizualised_path(fgm : FisherGeometricModel) -> None:
         kwargs = {'scale_units' : 'xy', 'angles' : 'xy', 'color': 'k', 'scale' : 1}
 
     elif fgm.dimension == 3:
+        fig = plt.figure(figsize = (10,4))
         ax = fig.add_subplot(projection = '3d')
         kwargs = {'color': 'k'}
     else:
-        raise Warning("Unable to plot a graph when dimensions > 3")
+        print("Unable to plot a visalization graph when dimensions > 3")
+        return
     
     unique_positions = np.array([pos for i,pos in enumerate(fgm.positions) if sum(fgm.methods[i])>0])
 
@@ -163,7 +166,7 @@ def plot_vizualised_path(fgm : FisherGeometricModel) -> None:
         ax.plot(*line, c = 'r')
         prev_pos = pos
 
-    ax.scatter(*unique_positions.T,c = "r")
+    ax.scatter(*unique_positions.T,c = "r", label = 'Evolutionary path')
 
     number_of_genes = np.shape(fgm.genes)[0]
     genome = np.resize(fgm.genes.copy(),(number_of_genes,fgm.dimension))
@@ -177,8 +180,9 @@ def plot_vizualised_path(fgm : FisherGeometricModel) -> None:
     
     origin = fgm.optimum
 
-    ax.scatter(*origin, c = 'k')        
+    ax.scatter(*origin, c = 'k')
     ax.grid()
+    ax.legend()
     return fig
 
 def plotting_size(fgm : FisherGeometricModel):
@@ -275,77 +279,71 @@ def draw_gene_trait_graph(fgm : FisherGeometricModel) -> None:
             if alpha >= 0:
                 ax.plot((0,10),(i,j*(nb_genes-1)/(nb_traits-1)),c = color,alpha = alpha)
     
-    
     ax.scatter(gene_x_positions,gene_y_positions)
     ax.scatter(trait_x_positions,trait_y_positions)
 
-    plt.show()
-
-    return
+    return fig
 
 def draw_fixation_gene_plot(fgm_args : dict, ns: list[int], fitness_limit : float= 0.99, nb_tests : int = 10) -> None:
 
     nb_genes = np.zeros(shape = (len(ns), nb_tests))
     fixation_times = np.zeros(shape = (len(ns), nb_tests))
-    nb_communities = np.zeros(shape = (len(ns),nb_tests))
 
     for i,n in enumerate(ns):
-        s = 0
         for j in range(nb_tests):
             fgm = FisherGeometricModel(n, **fgm_args)
             fgm.evolve_until_fitness(fitness_limit = fitness_limit)
             nb_genes[i,j] = len(fgm.genes)
             fixation_times[i,j] = fgm.current_time
-            communities = len(fgm.get_communities())
-            s += communities
-            print(f"Nr of communities in dim {n}, test {j}: {communities}")
-        nb_communities[i] = s/nb_tests
         print(f"Dimension {n} done!")
     # print(f"Average number of communities for dimensions {ns}: {nb_communities}")
 
     fig = plt.figure(figsize= (10,4))
-    axs = plt.subplots(1,2)
-    ax1 = axs[0]
-    ax2 = axs[1]
-    ax1.set_xlabel("Number of dimensions")
-    ax1.set_ylabel("Time until fixation")
-    ax1.set_title(f"Simulations reaching a fitness of {fitness_limit}")
-    ax1.set_yscale('log')
-    ax1.grid()
+    ax = plt.subplot()
+    ax.set_xlabel("Number of dimensions")
+    ax.set_ylabel("Time until fixation")
+    ax.set_title(f"Simulations reaching a fitness of {fitness_limit}")
+    # ax.set_yscale('log')
+    ax.grid()
 
-    ax2.set_xlabel("Number of dimensions")
-    ax2.set_ylabel("Number of communities")
-    ax2.set_title(f"Number of communities for different dimensions n")
-    ax2.grid()
 
     X = np.tile(ns, (nb_tests,1))
 
     cmap = plt.cm.viridis
-    scatter = ax1.scatter(X.flatten(), fixation_times.flatten(), c = nb_genes.flatten(), cmap = cmap, linewidths= 5)
-    cbar = fig.colorbar(scatter, ax=ax1, label='Number of genes at fixation')
-
-    ax2.scatter(X.flatten(), nb_communities.flatten(), c = 'b', label = "Simulations")
-    ax2.scatter(ns, np.mean(nb_communities,axis= 1), c = 'r', label = "Means")
-    ax2.legend()
+    scatter = ax.scatter(X.flatten(), fixation_times.flatten(), c = nb_genes.flatten(), cmap = cmap, linewidths= 5)
+    cbar = fig.colorbar(scatter, ax=ax, label='Number of genes at fixation')
     
     # print(nb_genes)
-    plt.show()
-    return
+    return fig
+
+def draw_modularity_plot(fgm : FisherGeometricModel):
+    fig = plt.figure(figsize = (10,4))
+    ax = plt.subplot()
+    
+    genes = abs(fgm.genes)
+    a = np.max(genes,axis = 0)
+    # genes /= a
+    ax.hist(genes, bins = 'auto', stacked = True)
+
+    return fig
+
+
 
 if __name__ == "__main__":
     with open('FisherObject', 'rb') as input:
         fgm :FisherGeometricModel = pickle.load(input)
 
-    if False:
-        args = fgm.get_args()
+    if True:
+        with open("Variables.json", 'rb') as input:
+            args = json.load(input)
         args.pop('n')
         args["display_fixation"] = False
-        ns = range(20,30,1)
+        ns = range(2,20,1)
         nb_tests = 10
         fitness_limit = 0.9
         draw_fixation_gene_plot(args, ns = ns, nb_tests = nb_tests, fitness_limit= fitness_limit)
-    
-    if True:
+
+    if False:
         # print(f"Number of genes in time: {fgm.nb_genes}")
         # print(fgm.methods)
         print(f"Number of {fgm.get_args()['mutation_methods']} = {np.sum(fgm.methods,axis = 0)}")
@@ -357,7 +355,7 @@ if __name__ == "__main__":
         print(f"Initial position: {fgm.init_pos}")
         plotting_size(fgm)
         plotting_path(fgm)
-        # plot_vizualised_path(fgm)
-        draw_gene_trait_graph(fgm)
+        plot_vizualised_path(fgm)
+        # draw_gene_trait_graph(fgm)
+        draw_modularity_plot(fgm)
     plt.show()
-    
