@@ -333,8 +333,8 @@ if __name__ == "__main__":
     with open('FisherObject', 'rb') as input:
         fgm :FisherGeometricModel = pickle.load(input)
 
-    if True:
-        with open("Variables.json", 'rb') as input:
+    if False:
+        with open("Parameters.json", 'rb') as input:
             args = json.load(input)
         args.pop('n')
         args["display_fixation"] = False
@@ -343,19 +343,19 @@ if __name__ == "__main__":
         fitness_limit = 0.9
         draw_fixation_gene_plot(args, ns = ns, nb_tests = nb_tests, fitness_limit= fitness_limit)
 
-    if False:
+    if True:
         # print(f"Number of genes in time: {fgm.nb_genes}")
         # print(fgm.methods)
         print(f"Number of {fgm.get_args()['mutation_methods']} = {np.sum(fgm.methods,axis = 0)}")
-        # print(f"Number of genes: {np.unique(fgm.nb_genes, return_counts=True)}")
+        print(f"Number of genes: {np.unique(fgm.nb_genes, return_counts=True)}")
         gene_sizes = np.linalg.norm(fgm.genes, axis = 1)
-        print(f"Size of genes: {np.sort(gene_sizes)}")
+        # print(f"Size of genes: {np.sort(gene_sizes)}")
         print(f"Inital beneficial directions: {fgm.initial_beneficial_directions}")
-        print(f"Genes : {fgm.genes}")
-        print(f"Initial position: {fgm.init_pos}")
+        # print(f"Genes : {fgm.genes}")
+        # print(f"Initial position: {fgm.init_pos}")
         plotting_size(fgm)
         plotting_path(fgm)
         plot_vizualised_path(fgm)
-        # draw_gene_trait_graph(fgm)
+        # # draw_gene_trait_graph(fgm)
         draw_modularity_plot(fgm)
     plt.show()

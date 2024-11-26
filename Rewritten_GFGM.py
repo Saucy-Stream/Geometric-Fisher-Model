@@ -716,28 +716,13 @@ class FisherGeometricModel() :
 ####################
 
 if __name__ == "__main__":
-    #Save a FisherGeometricObjectModel to the file FisherObject.pkl
+    #Save a FisherGeometricObjectModel with parameters from Parameters.json to the file FisherObject.pkl
 
-    dimension = 3  # Number of traits in the phenotype space n
-    initial_distance = 20 # initial distance to the optimum
-    # sigma_point = r/np.sqrt(n_traits) # Standard deviation of the mutation effect size # Tenaillon 2014
-    sigma_point = 0.01 # énormement de duplication/deletion par rapport au nombre de mutation quand on baisse sigma (voir sigma=0.01)
-    sigma_mult = 0.05
-    alpha = 1/2
-    Q = 2
-
-    addition_rate = 1e-2
-    duplication_rate = 1e-2 # /gene/generation
-    deletion_rate = 1e-2 # /gene/generation
-
-    initial_gene_method = "random"
-    mutation_methods : list[str] = ["multiplication", "duplication", "deletion"]
-
-    display_fixation = True
-    fgm_args = {'display_fixation':display_fixation, 'n': dimension, 'initial_distance': initial_distance, 'mutation_methods': mutation_methods, 'sigma_point': sigma_point,  'duplication_rate': duplication_rate, 'deletion_rate': deletion_rate, 'initial_gene_method': initial_gene_method, 'sigma_mult': sigma_mult, 'addition_rate': addition_rate}
+    with open("Parameters.json", 'rb') as input:
+        fgm_args = json.load(input)
     fgm = FisherGeometricModel(**fgm_args)
 
-    n_generations = 1*10**4
+    n_generations = 1*10**5
     fgm.evolve_successive(n_generations)
     with open('FisherObject', 'wb') as output:
         pickle.dump(fgm, output, pickle.HIGHEST_PROTOCOL)
