@@ -22,7 +22,7 @@ import json
 ##############################
 
 class FisherGeometricModel() :
-    def __init__(self, n: int = 3, initial_distance: float = 20, mutation_methods : list[str] = ["multiplication","addition", "duplication", "deletion"], alpha: float = 0.5, Q: float = 2, sigma_point: float = 1, duplication_rate: float = 0.01, deletion_rate: float = 0.01, ratio: float = 1, initial_gene_method: str = "random", timestamp : float = 1e5, sigma_mult : float = 0.1, addition_rate : float = 0.01, sigma_add : float = 0.1, display_fixation : bool = False) :
+    def __init__(self, n: int = 3, initial_distance: float = 20, mutation_methods : list[str] = ["multiplication","addition", "duplication", "deletion"], alpha: float = 0.5, Q: float = 2, sigma_add: float = 1, duplication_rate: float = 0.01, deletion_rate: float = 0.01, ratio: float = 1, initial_gene_method: str = "random", timestamp : float = 1e5, sigma_mult : float = 0.1, display_fixation : bool = False) :
         """
         Initialized the main parameters and variables used in our modified FGM.
         
@@ -39,8 +39,8 @@ class FisherGeometricModel() :
             Epistasis parameter;\\
             alpha and Q influence the decay rate and the curvature of the fitness function (Tenaillon 2014)
         ratio
-            Ratio between sigma_gene and sigma_point (size of the first gene). Affects the rate of duplication versus mutation.
-        sigma_point
+            Ratio between sigma_gene and sigma_add (size of the first gene). Affects the rate of duplication versus mutation.
+        sigma_add
             Standard deviation of the mutational vector on each axis
         duplication_rate
             Rate of duplication in nb/gene/generation
@@ -60,7 +60,6 @@ class FisherGeometricModel() :
         self.optimum : np.ndarray[float] = np.zeros(n) #define the origin as the fitness optimum
         self.alpha : float = alpha
         self.Q : float = Q 
-        self.sigma_point : float = sigma_point
         self.sigma_mult : float = sigma_mult
         self.sigma_add : float = sigma_add
 
@@ -70,7 +69,6 @@ class FisherGeometricModel() :
         self.current_pos = self.init_pos + np.sum(self.genes, axis = 0) # the real phenotypic position of the individual is computed by adding the genes vectors to the initial position
         self.current_fitness = self.fitness_calc(self.current_pos) # Compute the fitness of the actual phenotype before any mutation happen
 
-        self.addition_rate = addition_rate
         self.duplication_rate = duplication_rate 
         self.deletion_rate = deletion_rate
 
@@ -78,10 +76,8 @@ class FisherGeometricModel() :
         for i,method in enumerate(mutation_methods):
             if method == "multiplication":
                 self.mutation_functions[i] = self.multiplicative_point_mutation
-            elif method == "point":
-                self.mutation_functions[i] = self.addative_point_mutation
             elif method == "addition":
-                self.mutation_functions[i] = self.add_random_genes
+                self.mutation_functions[i] = self.addative_point_mutation
             elif method == "duplication":
                 self.mutation_functions[i] = self.duplication
             elif method == "deletion":
@@ -95,6 +91,7 @@ class FisherGeometricModel() :
         self.positions : np.ndarray[np.ndarray[float]] = [self.init_pos, self.current_pos] # memorize the to first position, which are the initial phenotype of the individual and its phenotype after addition of the first gene
         self.fitness : np.ndarray[float] = [fit_1, fit_2] # fitness values of the phenotype at each iteration
         self.methods = np.array([[False]*len(mutation_methods),[False]*len(mutation_methods)]) # method use to modificate the genotype at each iteration
+        self.modularities = np.array([0,self.find_modularity(self.genes)])
         self.nb_genes = [0,1] # gene count at each generation
         self.mean_size = np.array([0,np.linalg.norm(self.genes[0])]) # mean size of the genes at each iteration
         self.std_size = np.array([0,0])
@@ -110,7 +107,7 @@ class FisherGeometricModel() :
         self.initial_beneficial_directions = np.sum([1 for i in range(n) if initial_signs[i] < 0])
         self.display_fixation = display_fixation
 
-        self.args = {'n': n, 'initial_distance': initial_distance, 'mutation_methods': mutation_methods, 'alpha' : alpha, 'Q' : Q, 'sigma_point': sigma_point,  'duplication_rate': duplication_rate, 'deletion_rate': deletion_rate, 'initial_gene_method': initial_gene_method, 'timestamp': timestamp, 'sigma_mult': sigma_mult, 'addition_rate': addition_rate, 'sigma_add' : sigma_add, 'display_fixation':display_fixation}
+        self.args = {'n': n, 'initial_distance': initial_distance, 'mutation_methods': mutation_methods, 'alpha' : alpha, 'Q' : Q,  'duplication_rate': duplication_rate, 'deletion_rate': deletion_rate, 'initial_gene_method': initial_gene_method, 'timestamp': timestamp, 'sigma_mult': sigma_mult, 'sigma_add' : sigma_add, 'display_fixation':display_fixation}
     
     def get_args(self):
         return self.args.copy()
@@ -134,7 +131,7 @@ class FisherGeometricModel() :
             Parameter which allow to play on the ratio of the standart deviation of the size of a gene and a mutation 
         direction
             Indicate the direction that should have the gene's vector
-            Other parameters arre self defined in the class object (see __init__). Useful parameters are init_pos, sigma_point,
+            Other parameters arre self defined in the class object (see __init__). Useful parameters are init_pos, sigma_add,
             dimension.
 
         ------
@@ -147,7 +144,7 @@ class FisherGeometricModel() :
         if method == "random" :
             s = -1 
             while s < 0 : # we consider that the first gene must be at least neutral or beneficial so that the organism survive
-                gene = np.random.normal(0, self.sigma_point, self.dimension) # We draw the gene as if it was a mutation of the starting point in the Standart FGM
+                gene = np.random.normal(0, self.sigma_add, self.dimension) # We draw the gene as if it was a mutation of the starting point in the Standart FGM
                 new_pos = self.init_pos + gene # compute the new phenotypic position after adding the gene 
                 s = self.fitness_effect(self.fitness_calc(self.init_pos), self.fitness_calc(new_pos)) # compute the fitness effect of such a gene.
             # print(np.linalg.norm(gene))
@@ -155,7 +152,7 @@ class FisherGeometricModel() :
         
         elif method == "parallel" : 
             # en partant sur une "diagonale" du graphe (cadrant positif)
-            # return np.ones(self.dimension) * (-r * self.sigma_point  / np.sqrt(self.dimension)) # gene on the axe to the optimum (dans le cas où la position choisi est à 45°) : in this case the gene is optimal for adaptation, the simulation only make duplication 
+            # return np.ones(self.dimension) * (-r * self.sigma_add  / np.sqrt(self.dimension)) # gene on the axe to the optimum (dans le cas où la position choisi est à 45°) : in this case the gene is optimal for adaptation, the simulation only make duplication 
             # attention dépend à nouveau bcp de la taille du premier gène. S'il est grand, ne fait que des duplications. Si il est petits, c'est assez aléatoire (il y a toujours pas mal de duplication au début mais pas tant que ça)
             # Dans ce cas comme les mutations sont assez bénéfiques aussi comparé à la duplication elles se fixent aussi ce qui bouge le point de l'axe optimal 
             
@@ -171,7 +168,7 @@ class FisherGeometricModel() :
                     gene = np.dot(gene, grad_unit) * grad_unit # Project the gene onto the axe of the gradient
 
                 gene = gene / np.linalg.norm(gene)  # Normalize to unit length
-                gene = gene * self.sigma_point  # Scale to the desired length
+                gene = gene * self.sigma_add  # Scale to the desired length
 
                 new_pos = self.init_pos + gene
                 s = self.fitness_effect(self.fitness_calc(self.init_pos), self.fitness_calc(new_pos)) # Compute the fitness effect (should be highly beneficial)
@@ -180,13 +177,13 @@ class FisherGeometricModel() :
         
         elif method == "orthogonal" :
             # methode 1 : (en partant sur un axe du graphique)
-            # gene = np.ones(self.dimension) * (-r * self.sigma_point / np.sqrt(self.dimension))
+            # gene = np.ones(self.dimension) * (-r * self.sigma_add / np.sqrt(self.dimension))
             # gene[0] *= 0 # 0 si on part sur un axe (mettre toutes les valeurs à 0 sauf 1 dans init_pos). Dans ce cas le gène est délétère : il est supprimer et rien ne peut se faire de mieux ensuite.
             # si on utilise cette méthode sans partir sur un axe, le gène est quasiment bien aligné, dans ce cas c'est un peu comme parallele : bcp de duplication au début, mais ensuite mute un peu et supprime les gènes mauvais ?
             
             # methode 2 : ( modifier deux directions suffit ?)
-            # gene[0] -= r * self.sigma_point / sqrt(2)
-            # gene[1] += r * self.sigma_point / sqrt(2)
+            # gene[0] -= r * self.sigma_add / sqrt(2)
+            # gene[1] += r * self.sigma_add / sqrt(2)
 
             # methode 3 : calcul du gradient de f permettant de connaitre la direction de variation la plus forte de f = l'axe optimal
             grad = self.fitness_gradient(self.init_pos) # gradient of the fitness function
@@ -198,7 +195,7 @@ class FisherGeometricModel() :
                 gene = gene - np.dot(gene, grad_unit) * grad_unit # Project the gene onto the space orthogonal to the gradient
 
             gene = gene / np.linalg.norm(gene)  # Normalize to unit length
-            gene = gene * self.sigma_point  # Scale to the desired length
+            gene = gene * self.sigma_add  # Scale to the desired length
 
             new_pos = self.init_pos + gene
             s = self.fitness_effect(self.fitness_calc(self.init_pos), self.fitness_calc(new_pos)) # compute its fitness effect (should be little deleterious)
@@ -209,7 +206,7 @@ class FisherGeometricModel() :
         
         elif method == "only_one_deleterious_direction" :
             # Methode 1 : If the initial position is on a "diagonal" of the graph (positive quadrant)
-            # gene = np.ones(self.dimension) * (-r * self.sigma_point / np.sqrt(self.dimension))
+            # gene = np.ones(self.dimension) * (-r * self.sigma_add / np.sqrt(self.dimension))
             # gene[0] *= -1
 
             # Methode 2 : with grad f :
@@ -222,7 +219,7 @@ class FisherGeometricModel() :
                 gene = np.dot(gene, grad_unit) * grad_unit # Project the gene onto the axe of the gradient
 
             gene = gene / np.linalg.norm(gene)  # Normalize to unit length
-            gene = gene * self.sigma_point  # Scale to the desired length
+            gene = gene * self.sigma_add  # Scale to the desired length
             # Construct the gene as if it was parallel to the optimal axes
             
             gene[0] *= -1 # only make one dimension wrong
@@ -246,7 +243,7 @@ class FisherGeometricModel() :
                     random_vect = random_vect - np.dot(random_vect, grad_unit) * grad_unit # Project the vector onto the space orthogonal to the gradient
                     orthogonal_unit = random_vect / np.linalg.norm(random_vect) # unit vector of the axis orthogonal to the optimal axe
                 
-                z = self.sigma_point # Wanted size of the gene
+                z = self.sigma_add # Wanted size of the gene
                 d = np.linalg.norm(self.init_pos) # Wanted distance to the optimum
                 triangle_surface = z/2 * np.sqrt(d**2 - z**2 / 4) # Geometricaly, the gene vector and the axes linking the initial position / the position after adding the gene to the optimum form an isosceles triangle
                 # there are different way of computing a triangle surface, which help us to find angles from the known distances
@@ -277,7 +274,7 @@ class FisherGeometricModel() :
                     random_vect = random_vect - np.dot(random_vect, grad_unit) * grad_unit # Project the vector onto the space orthogonal to the gradient
                     orthogonal_unit = random_vect / np.linalg.norm(random_vect) # unit vector of the axis orthogonal to the optimal axe
                 
-                z = self.sigma_point # Wanted size of the gene
+                z = self.sigma_add # Wanted size of the gene
                 d = np.linalg.norm(self.init_pos) # Wanted distance to the optimum
                 #QUESTION: How does this triangle equation work? Vsiualisation?
                 triangle_surface = z/2 * np.sqrt(d**2 - z**2 / 4) # Geometricaly, the gene vector and the axes linking the initial position / the position after adding the gene to the optimum form an isosceles triangle
@@ -294,31 +291,6 @@ class FisherGeometricModel() :
             # print(s)
 
         return gene
-
-    def add_random_genes(self,base_genes : np.ndarray[np.ndarray[float]]):
-        """
-        Adds random genes drawn form a normal distribution to a previous list of genes.
-
-        Parameters
-        -----
-        base_genes : np.ndarray[np.ndarray[float]]
-            List of the genes to be modified
-        sigma : float
-            Variance of the added gene
-        rate : float
-            Rate of addition. This determines the average number of genes added.
-
-        Returns
-        -----
-        new_genes : np.ndarray[np.ndarray[float]]
-            List of genes including the newly added one
-        """
-        list_genes = base_genes.copy()
-        nb_additions = np.random.poisson(self.addition_rate)
-        if nb_additions > 0:
-            genes = np.random.normal(0, self.sigma_add, (nb_additions,self.dimension))
-            list_genes = np.concatenate([list_genes, genes])
-        return list_genes, nb_additions > 0
 
     def fitness_gradient(self, position : np.array) -> np.array:
         """
@@ -352,7 +324,7 @@ class FisherGeometricModel() :
         ------
         current_genes : np.ndarray[np.ndarray[float]]
             List of genes to be duplicated
-        The useful parameters here are dimension, sigma_point
+        The useful parameters here are dimension, sigma_add
 
         Return :
         ------ 
@@ -365,8 +337,7 @@ class FisherGeometricModel() :
         """
         new_genes = current_genes.copy()
         n = len(new_genes)
-        variance = [[self.sigma_mult*abs(direction)**(-1/2) for direction in gene] for gene in new_genes]
-        mutations = np.random.normal(1,variance, size = (n, self.dimension))
+        mutations = np.random.normal(1,self.sigma_mult, size = (n, self.dimension))
 
         # if any(mutations.flatten() < 0):
         #     flips = [i for i,mut in enumerate(mutations.flatten()) if mut<0]
@@ -387,7 +358,7 @@ class FisherGeometricModel() :
         ------
         current_genes : np.ndarray[np.ndarray[float]]
             List of genes to be duplicated
-        The useful parameters here are dimension, sigma_point
+        The useful parameters here are dimension, sigma_add
 
         Return :
         ------ 
@@ -400,9 +371,9 @@ class FisherGeometricModel() :
         """
         new_genes = current_genes.copy()
         n = len(new_genes)
-        m = np.random.normal(0, self.sigma_point, size=(n, self.dimension)) # draw the mutation from a normal distribution of variance n*sigma_point**2 (variance of a sum of mutation)
+        m = np.random.normal(0, self.sigma_add, size=(n, self.dimension)) # draw the mutation from a normal distribution of variance n*sigma_add**2 (variance of a sum of mutation)
         
-        new_genes = [new_genes[i] + m[i] for i in range(n)] # modify every genes in the list by adding the corresponding mutation. All genes do not mutate the same way
+        new_genes = np.array([new_genes[i] + m[i] for i in range(n)]) # modify every genes in the list by adding the corresponding mutation. All genes do not mutate the same way
         # print(f"1st gene: {self.genes[0]}, mutation: {m[0]}")
         mut = True
         return new_genes, mut
@@ -543,16 +514,21 @@ class FisherGeometricModel() :
             p = 0 # deleterious mutation do not fix
         return p
 
+    def append_data(self, time : int) -> None:
+        self.methods = np.concatenate((self.methods, np.full((time,len(self.mutation_functions)), fill_value= False)))
+        self.positions = np.concatenate((self.positions, np.zeros(shape = (time,self.dimension))))
+        self.mean_size = np.concatenate((self.mean_size, np.zeros(shape = time)))
+        self.std_size = np.concatenate((self.std_size, np.zeros(shape = time)))
+        self.fitness = np.concatenate((self.fitness, np.zeros(shape = time)))
+        self.nb_genes = np.concatenate((self.nb_genes, np.zeros(shape = time)))
+        self.modularities = np.concatenate((self.modularities, np.zeros(shape = time)))
+        return
+
     def evolve_until_fitness(self, fitness_limit: float) -> None:
         time = self.current_time
         while self.current_fitness < fitness_limit:
             if time >= len(self.methods):
-                self.methods = np.concatenate((self.methods, np.full((time,len(self.mutation_functions)), fill_value= False)))
-                self.positions = np.concatenate((self.positions, np.zeros(shape = (time,self.dimension))))
-                self.mean_size = np.concatenate((self.mean_size, np.zeros(shape = time)))
-                self.std_size = np.concatenate((self.std_size, np.zeros(shape = time)))
-                self.fitness = np.concatenate((self.fitness, np.zeros(shape = time)))
-                self.nb_genes = np.concatenate((self.nb_genes, np.zeros(shape = time)))
+                self.append_data(time)
             self.simulation_step(time)
 
             time += 1
@@ -589,12 +565,7 @@ class FisherGeometricModel() :
         """
 
         #Add extra space to the different vectors so they can fit new simulation data
-        self.methods = np.concatenate((self.methods, np.full((time_step,len(self.mutation_functions)), fill_value= False)))
-        self.positions = np.concatenate((self.positions, np.zeros(shape = (time_step,self.dimension))))
-        self.mean_size = np.concatenate((self.mean_size, np.zeros(shape = time_step)))
-        self.std_size = np.concatenate((self.std_size, np.zeros(shape = time_step)))
-        self.fitness = np.concatenate((self.fitness, np.zeros(shape = time_step)))
-        self.nb_genes = np.concatenate((self.nb_genes, np.zeros(shape = time_step)))
+        self.append_data(time_step)
 
         time = self.current_time
         for t in range(time_step):
@@ -626,15 +597,21 @@ class FisherGeometricModel() :
         
         if any_fixation:
             self.methods[time] = np.array(mutation_occured)
+            self.fitness[time] = self.current_fitness
+            self.nb_genes[time] = len(self.genes)
+            self.positions[time] = (self.current_pos)
+            sizes = np.linalg.norm(self.genes, axis = 1)
+            self.mean_size[time] = np.mean(sizes)
+            self.std_size[time] = np.std(sizes)
+            self.modularities[time] = self.find_modularity(self.genes)
         else:
             self.methods[time] = np.array(np.full(len(self.mutation_functions),False))
-
-        self.fitness[time] = self.current_fitness
-        self.nb_genes[time] = len(self.genes)
-        self.positions[time] = (self.current_pos)
-        sizes = np.linalg.norm(self.genes, axis = 1)
-        self.mean_size[time] = np.mean(sizes)
-        self.std_size[time] = np.std(sizes)
+            self.fitness[time] = self.fitness[time - 1]
+            self.nb_genes[time] = self.nb_genes[time - 1]
+            self.positions[time] = self.positions[time - 1]
+            self.mean_size[time] = self.mean_size[time - 1]
+            self.std_size[time] = self.std_size[time- 1 ]
+            self.modularities[time] = self.modularities[time - 1]
 
         return
 
@@ -698,6 +675,31 @@ class FisherGeometricModel() :
 
         return
 
+    def find_modularity(self, genes: np.ndarray) -> float:
+        gene_copies = np.copy(genes)
+        n = self.dimension  # Dimension of the vectors
+        scale = 1 / np.sqrt(n)
+        weighted_modularity_sum = 0
+        total_weight = 0
+
+        for gene in gene_copies:
+            gene /= np.linalg.norm(gene)  # Normalize the gene vector
+            
+            # Calculate the modularity of the gene
+            strongest_dir = max(abs(gene))  # Max absolute value of the components
+            modularity = (strongest_dir - scale) / (1 - scale)
+
+            # Calculate the weight of the gene based on its magnitude
+            weight = np.linalg.norm(gene)  # Weight is the norm (magnitude) of the vector
+
+            # Add to the weighted sum of modularity and the total weight
+            weighted_modularity_sum += modularity * weight
+            total_weight += weight
+
+        # Return the weighted average modularity
+        M = weighted_modularity_sum / total_weight if total_weight != 0 else 0
+        return M
+
     def get_graph(self) -> nx.Graph:
         edges = [(f'gene {i}',f'trait {j}',{'weight' : w[j]}) for (i,w) in enumerate(self.genes) for j in range(self.dimension)]
         graph = nx.from_edgelist(edges)
@@ -722,7 +724,7 @@ if __name__ == "__main__":
         fgm_args = json.load(input)
     fgm = FisherGeometricModel(**fgm_args)
 
-    n_generations = 1*10**5
+    n_generations = 5*10**4
     fgm.evolve_successive(n_generations)
     with open('FisherObject', 'wb') as output:
         pickle.dump(fgm, output, pickle.HIGHEST_PROTOCOL)

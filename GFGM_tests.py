@@ -116,14 +116,16 @@ def plotting_path(fgm : FisherGeometricModel):
         (show the graph in an other window)
         
     """
-    path = np.linalg.norm(fgm.positions,axis = 1)
+    # path = np.linalg.norm(fgm.positions,axis = 1)
+    path = fgm.fitness
     fig = plt.figure(figsize = (10,4))
     ax = fig.add_subplot()
     ax.plot(path)
     ax.set_xlabel('Time')
-    ax.set_ylabel('Distance to the optimum')
-    ax.set_title('Evolution of the Distance to the Optimum of Phenotype after each Fixed Mutation')
-    ax.loglog()
+    ax.set_ylabel('Fitness')
+    ax.set_title('Evolution of fitness')
+    ax.set_yscale("log")
+    ax.set_xscale("log")
     ax.grid()
     return fig
 
@@ -216,9 +218,10 @@ def plotting_size(fgm : FisherGeometricModel):
 
     ax1 = plt.subplot(1, 2, 1)
     ax1.plot(fgm.nb_genes)
-    ax1.set_xlabel('Mutational Events')
+    ax1.set_xlabel('Time')
     ax1.set_ylabel('Number of genes in the genotype')
     ax1.set_title('Evolution of the Number of genes with Time')
+    ax1.set_xscale("log")
     ax1.grid()
 
     ax2 = plt.subplot(1, 2, 2)
@@ -227,6 +230,7 @@ def plotting_size(fgm : FisherGeometricModel):
     ax2.set_xlabel('Time')
     ax2.set_ylabel('Mean size of genes in the genotype')
     ax2.set_title('Evolution of the size of genes with Time')
+    ax2.set_xscale("log")
     ax2.grid()
     
     return fig
@@ -284,7 +288,11 @@ def draw_gene_trait_graph(fgm : FisherGeometricModel) -> None:
 
     return fig
 
-def draw_fixation_gene_plot(fgm_args : dict, ns: list[int], fitness_limit : float= 0.99, nb_tests : int = 10) -> None:
+def test_fixation_time(fgm_args : dict, ns: list[int], fitness_limit : float= 0.99, nb_tests : int = 10) -> None:
+    try:
+        fgm_args.pop('n')
+    except:
+        pass
 
     nb_genes = np.zeros(shape = (len(ns), nb_tests))
     fixation_times = np.zeros(shape = (len(ns), nb_tests))
@@ -316,6 +324,76 @@ def draw_fixation_gene_plot(fgm_args : dict, ns: list[int], fitness_limit : floa
     # print(nb_genes)
     return fig
 
+def test_modularity(fgm_args : dict, tested_methods : list[list[str]], nb_tests : int = 100, fitness_limit : float = 0.95, with_random : bool = True):
+    def find_modularity(vecs: np.ndarray[np.ndarray[float]]) -> float:
+        vec_copies = np.copy(vecs)
+        n = len(vec_copies[0])  # Dimension of the vectors
+        scale = 1 / np.sqrt(n)
+        weighted_modularity_sum = 0
+        total_weight = 0
+        for vec in vec_copies:
+            vec /= np.linalg.norm(vec)  # Normalize the vec vector
+            
+            # Calculate the modularity of the vec
+            strongest_dir = max(abs(vec))  # Max absolute value of the components
+            modularity = (strongest_dir - scale) / (1 - scale)
+
+            # Calculate the weight of the vec based on its magnitude
+            weight = np.linalg.norm(vec)  # Weight is the norm (magnitude) of the vector
+
+            # Add to the weighted sum of modularity and the total weight
+            weighted_modularity_sum += modularity * weight
+            total_weight += weight
+
+        # Return the weighted average modularity
+        M = weighted_modularity_sum / total_weight if total_weight != 0 else 0
+        return M
+
+    fig = plt.figure(figsize= (10,4))
+    ax = plt.subplot()
+    ax.set_xlabel("Methods used")
+    ax.set_ylabel("Final modlarity")
+    ax.set_title(f"Simulations reaching a fitness of {fitness_limit}")
+    ax.grid()
+
+    m = len(tested_methods)
+    modularities = np.zeros(shape = (m, nb_tests))
+    fixation_times = np.zeros(shape = (m, nb_tests))
+
+    try:
+        fgm_args.pop("mutation_methods")
+    except:
+        pass
+    
+    for i,methods in enumerate(tested_methods):
+        for j in range(nb_tests):
+            fgm = FisherGeometricModel(mutation_methods=methods, **fgm_args)
+            fgm.evolve_until_fitness(fitness_limit = fitness_limit)
+            modularities[i,j] = fgm.modularities[fgm.current_time-1]
+            fixation_times[i,j] = fgm.current_time
+        print(f"Method {methods} done!")
+    
+    if with_random:
+        mods = np.zeros(nb_tests)
+        n = fgm_args["n"]
+        for i in range(nb_tests):
+            #TODO: change the distribution of the number of vectors created to better match actual data
+            v = np.random.normal(0,1,(np.random.randint(1,101),n))
+            modularity = find_modularity(v)
+            mods[i] = modularity
+        ax.boxplot(mods,tick_labels=[f"Random sets of {n}-dimensional genes"], positions = [m+1])
+
+
+
+
+    ax.boxplot(modularities.T, tick_labels=["With duplication", "Only addition"], positions=np.arange(1,m+1))
+    ax.set_ylim([0,1])
+    # print(nb_genes)
+    fig.tight_layout()
+    return fig
+
+
+"""
 def draw_modularity_plot(fgm : FisherGeometricModel):
     fig = plt.figure(figsize = (10,4))
     ax = plt.subplot()
@@ -326,36 +404,50 @@ def draw_modularity_plot(fgm : FisherGeometricModel):
     ax.hist(genes, bins = 'auto', stacked = True)
 
     return fig
+"""
 
+def draw_modularity_plot(fgm:FisherGeometricModel):
+    fig = plt.figure(figsize = (10,4))
+    ax = plt.subplot()
+    
+    y = fgm.modularities
+    x = np.arange(fgm.current_time+1)
 
+    ax.plot(x,y,color = 'r', label = "Modularity")
+    ax.grid()
+    ax.set_xscale('log')
+    ax.legend()
+
+    return fig
+
+def show_simulation_results(fgm : FisherGeometricModel):
+    # print(f"Number of genes in time: {fgm.nb_genes}")
+    # print(fgm.methods)
+    print(f"Number of {fgm.get_args()['mutation_methods']} = {np.sum(fgm.methods,axis = 0)}")
+    print(f"Number of genes: {np.unique(fgm.nb_genes, return_counts=True)}")
+    gene_sizes = np.linalg.norm(fgm.genes, axis = 1)
+    # print(f"Size of genes: {np.sort(gene_sizes)}")
+    print(f"Inital beneficial directions: {fgm.initial_beneficial_directions}")
+    # print(f"Genes : {fgm.genes}")
+    # print(f"Initial position: {fgm.init_pos}")
+    plotting_size(fgm)
+    plotting_path(fgm)
+    plot_vizualised_path(fgm)
+    # # draw_gene_trait_graph(fgm)
+    draw_modularity_plot(fgm)
+    return
 
 if __name__ == "__main__":
     with open('FisherObject', 'rb') as input:
         fgm :FisherGeometricModel = pickle.load(input)
 
-    if False:
-        with open("Parameters.json", 'rb') as input:
-            args = json.load(input)
-        args.pop('n')
-        args["display_fixation"] = False
-        ns = range(2,20,1)
-        nb_tests = 10
-        fitness_limit = 0.9
-        draw_fixation_gene_plot(args, ns = ns, nb_tests = nb_tests, fitness_limit= fitness_limit)
+    with open("Parameters.json", 'rb') as input:
+        args = json.load(input)
+    args["display_fixation"] = False
+    # test_fixation_time(args, ns = range(2,103,5), nb_tests = 10, fitness_limit = 0.95)
+    tested_methods = [["addition","multiplication", "duplication", "deletion"],["addition","duplication", "deletion"]]
+    test_modularity(args,tested_methods, nb_tests = 100, fitness_limit= 0.9)
 
-    if True:
-        # print(f"Number of genes in time: {fgm.nb_genes}")
-        # print(fgm.methods)
-        print(f"Number of {fgm.get_args()['mutation_methods']} = {np.sum(fgm.methods,axis = 0)}")
-        print(f"Number of genes: {np.unique(fgm.nb_genes, return_counts=True)}")
-        gene_sizes = np.linalg.norm(fgm.genes, axis = 1)
-        # print(f"Size of genes: {np.sort(gene_sizes)}")
-        print(f"Inital beneficial directions: {fgm.initial_beneficial_directions}")
-        # print(f"Genes : {fgm.genes}")
-        # print(f"Initial position: {fgm.init_pos}")
-        plotting_size(fgm)
-        plotting_path(fgm)
-        plot_vizualised_path(fgm)
-        # # draw_gene_trait_graph(fgm)
-        draw_modularity_plot(fgm)
+    # show_simulation_results(fgm)
+
     plt.show()

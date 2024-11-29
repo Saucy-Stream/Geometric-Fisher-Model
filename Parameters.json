@@ -1,12 +1,11 @@
 {
-    "display_fixation":1, 
-    "n": 3,
-    "initial_distance": 20, 
-    "mutation_methods": ["addition", "duplication", "deletion"],
-    "sigma_point": 1e-2,  
-    "duplication_rate": 1e-2, 
-    "deletion_rate": 1e-2, 
-    "initial_gene_method": "random", 
-    "sigma_mult": 1e-1, 
-    "addition_rate": 1e-2
+    "display_fixation":1,
+    "n": 10,
+    "initial_distance": 20,
+    "mutation_methods": ["addition","multiplication", "duplication", "deletion"],
+    "sigma_add": 1e-2,
+    "duplication_rate": 2e-2,
+    "deletion_rate": 2e-2,
+    "initial_gene_method": "random",
+    "sigma_mult": 1e-1
 }
