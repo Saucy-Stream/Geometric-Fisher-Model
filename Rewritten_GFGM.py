@@ -22,7 +22,13 @@ import json
 ##############################
 
 class FisherGeometricModel() :
-    def __init__(self, n: int = 3, initial_distance: float = 20, mutation_methods : list[str] = ["multiplication","addition", "duplication", "deletion"], alpha: float = 0.5, Q: float = 2, sigma_add: float = 1, duplication_rate: float = 0.01, deletion_rate: float = 0.01, ratio: float = 1, initial_gene_method: str = "random", timestamp : float = 1e5, sigma_mult : float = 0.1, display_fixation : bool = False) :
+    def __init__(self, 
+                 n: int = 3, initial_distance: float = 20, 
+                 mutation_methods : list[str] = ["multiplication","addition", "duplication", "deletion"], 
+                 alpha: float = 0.5, Q: float = 2, sigma_add: float = 1, duplication_rate: float = 0.01, 
+                 deletion_rate: float = 0.01, ratio: float = 1, initial_gene_method: str = "random", 
+                 timestamp : float = 1e5, sigma_mult : float = 0.1, display_fixation : bool = False, 
+                 reset_rate : float = 0.01, reset_size : float = 1e-2) :
         """
         Initialized the main parameters and variables used in our modified FGM.
         
@@ -69,8 +75,11 @@ class FisherGeometricModel() :
         self.current_pos = self.init_pos + np.sum(self.genes, axis = 0) # the real phenotypic position of the individual is computed by adding the genes vectors to the initial position
         self.current_fitness = self.fitness_calc(self.current_pos) # Compute the fitness of the actual phenotype before any mutation happen
 
-        self.duplication_rate = duplication_rate 
-        self.deletion_rate = deletion_rate
+        self.duplication_rate : float = duplication_rate 
+        self.deletion_rate : float = deletion_rate
+        self.reset_rate : float = reset_rate
+
+        self.reset_size = reset_size
 
         self.mutation_functions = np.array([None]*len(mutation_methods))
         for i,method in enumerate(mutation_methods):
@@ -82,6 +91,8 @@ class FisherGeometricModel() :
                 self.mutation_functions[i] = self.duplication
             elif method == "deletion":
                 self.mutation_functions[i] = self.deletion
+            elif method == "reset":
+                self.mutation_functions[i] = self.reset_mutation
             else:
                 raise Warning(f"Unknown mutation method \"{method}\"")
 
@@ -337,7 +348,7 @@ class FisherGeometricModel() :
         """
         new_genes = current_genes.copy()
         n = len(new_genes)
-        mutations = np.random.normal(1,self.sigma_mult, size = (n, self.dimension))
+        mutations = np.random.lognormal(0,self.sigma_mult, size = (n, self.dimension))
 
         # if any(mutations.flatten() < 0):
         #     flips = [i for i,mut in enumerate(mutations.flatten()) if mut<0]
@@ -439,7 +450,22 @@ class FisherGeometricModel() :
             list_genes = np.delete(list_genes,removed_genes_index,0)
 
         return list_genes, nb_del > 0
-    
+
+    def reset_mutation(self,current_genes: np.ndarray[np.ndarray[float]]):
+        new_genes = np.copy(current_genes)
+        n = len(new_genes)
+        d = self.dimension
+        reset_values = (np.random.randint(0,2, size = (n,d))*2-1)*self.reset_size
+        resets = np.random.binomial(1,self.reset_rate, size = (n,d))
+
+        if (mut := any(resets.flatten())):
+            for i,gene in enumerate(new_genes):
+                for j,reset in enumerate(resets[i]):
+                    if reset:
+                        gene[j] = reset_values[i,j]
+
+        return new_genes, mut
+
     def fitness_calc(self, position) -> float: # 4sec
         """
         Compute the fitness of a point, depending on its position in the phenotypic space.
@@ -514,7 +540,7 @@ class FisherGeometricModel() :
             p = 0 # deleterious mutation do not fix
         return p
 
-    def append_data(self, time : int) -> None:
+    def extend_data(self, time : int) -> None:
         self.methods = np.concatenate((self.methods, np.full((time,len(self.mutation_functions)), fill_value= False)))
         self.positions = np.concatenate((self.positions, np.zeros(shape = (time,self.dimension))))
         self.mean_size = np.concatenate((self.mean_size, np.zeros(shape = time)))
@@ -527,11 +553,12 @@ class FisherGeometricModel() :
     def evolve_until_fitness(self, fitness_limit: float) -> None:
         time = self.current_time
         while self.current_fitness < fitness_limit:
+            time += 1
             if time >= len(self.methods):
-                self.append_data(time)
+                self.extend_data(time)
             self.simulation_step(time)
 
-            time += 1
+            
         self.current_time = time
         return
 
@@ -565,7 +592,7 @@ class FisherGeometricModel() :
         """
 
         #Add extra space to the different vectors so they can fit new simulation data
-        self.append_data(time_step)
+        self.extend_data(time_step)
 
         time = self.current_time
         for t in range(time_step):
@@ -577,7 +604,6 @@ class FisherGeometricModel() :
                 self.timestamp_genes = self.genes.copy()
             
             self.simulation_step(time)
-
         self.current_time = time
 
     def simulation_step(self, time : int) -> None:
@@ -683,16 +709,13 @@ class FisherGeometricModel() :
         total_weight = 0
 
         for gene in gene_copies:
-            gene /= np.linalg.norm(gene)  # Normalize the gene vector
-            
+            weight = np.linalg.norm(gene)
+            gene /= weight  # Normalize the gene vector
+
             # Calculate the modularity of the gene
             strongest_dir = max(abs(gene))  # Max absolute value of the components
             modularity = (strongest_dir - scale) / (1 - scale)
 
-            # Calculate the weight of the gene based on its magnitude
-            weight = np.linalg.norm(gene)  # Weight is the norm (magnitude) of the vector
-
-            # Add to the weighted sum of modularity and the total weight
             weighted_modularity_sum += modularity * weight
             total_weight += weight
 
@@ -724,7 +747,7 @@ if __name__ == "__main__":
         fgm_args = json.load(input)
     fgm = FisherGeometricModel(**fgm_args)
 
-    n_generations = 5*10**4
+    n_generations = 1*10**4
     fgm.evolve_successive(n_generations)
     with open('FisherObject', 'wb') as output:
         pickle.dump(fgm, output, pickle.HIGHEST_PROTOCOL)
