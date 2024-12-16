@@ -10,9 +10,6 @@ def numeric_test(r,d_1,n, tests = 1e5):
     t = 0
     success = 0
     proportion = 1
-    min_size = proportion*r/2
-
-
 
     min_size = proportion*r/2
     max_trials = 0
@@ -108,8 +105,8 @@ def analytical_sol(n = 5, r = 0.1):
     return prob
 
 def plot_probability_heatmap():
-    r_values = np.linspace(0.01, np.sqrt(2), 50)
-    n_values = np.arange(2, 12,2)
+    r_values = np.linspace(0.01, np.sqrt(2), 30)
+    n_values = np.arange(2, 22,2)
 
     heatmap_data = np.zeros((len(n_values), len(r_values)))
 
@@ -134,9 +131,9 @@ def plot_probability_heatmap():
 
 
 if __name__ == "__main__":
-    plot_numerical(n = 3)
+    # plot_numerical(n = 2)
     # print(numeric_test(0.1,1,2))
-    # plot_probability_heatmap()
+    plot_probability_heatmap()
     # analytical_sol(2)
 
     # print(del_prob(np.pi/3,0.01,2))

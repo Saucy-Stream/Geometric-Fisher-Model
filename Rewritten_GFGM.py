@@ -93,6 +93,8 @@ class FisherGeometricModel() :
                 self.mutation_functions[i] = self.deletion
             elif method == "reset":
                 self.mutation_functions[i] = self.reset_mutation
+            elif method == "angular":
+                self.mutation_functions[i] = self.angular_point_mutation
             else:
                 raise Warning(f"Unknown mutation method \"{method}\"")
 
@@ -324,6 +326,35 @@ class FisherGeometricModel() :
         """
         # return -self.Q * self.alpha * position * self.fitness_calc(position) # only true when Q = 2 
         return -self.Q * self.alpha * position * np.linalg.norm(position)**(self.Q - 2) * self.fitness_calc(position)
+
+    def angular_point_mutation(self,current_genes : np.ndarray[np.ndarray[float]]):
+        new_genes = current_genes.copy()
+
+        for i,gene in enumerate(new_genes):
+            spherical_coords = np.array(self.get_spherical_coordinates(gene))
+            spherical_coords[0] *= np.random.lognormal(0,self.sigma_mult)
+            spherical_coords[1:] += np.random.normal(0,self.sigma_mult*np.pi/2, size = self.dimension-1)
+            new_genes[i] = self.get_carthesian_coordinates(spherical_coords)
+        return new_genes, True
+    
+    def get_spherical_coordinates(self, carthesian_coordinates : np.ndarray[float]):
+        r = np.linalg.norm(carthesian_coordinates)
+        phi = np.zeros(self.dimension-1)
+        for n in range(self.dimension-2):
+            a =np.linalg.norm(carthesian_coordinates[n+1:])
+            phi[n] = np.arctan2(a,carthesian_coordinates[n])
+        phi[-1] = np.arctan2(carthesian_coordinates[-1],carthesian_coordinates[-2])
+        return r,*phi
+
+    def get_carthesian_coordinates(self, spherical_coordinates: np.ndarray[float]):
+        x = np.zeros(self.dimension)
+        r = spherical_coordinates[0]
+        for n in range(self.dimension-1):
+            a1 = np.cos(spherical_coordinates[n+1])
+            a2 = np.prod(np.sin(spherical_coordinates[1:n+1]))
+            x[n] = r*a1*a2
+        x[-1] = r*np.prod(np.sin(spherical_coordinates[1:]))
+        return x
 
     def multiplicative_point_mutation(self, current_genes : np.ndarray[np.ndarray[float]]):
         """
@@ -742,6 +773,7 @@ class FisherGeometricModel() :
 
 if __name__ == "__main__":
     #Save a FisherGeometricObjectModel with parameters from Parameters.json to the file FisherObject.pkl
+
 
     with open("Parameters.json", 'rb') as input:
         fgm_args = json.load(input)

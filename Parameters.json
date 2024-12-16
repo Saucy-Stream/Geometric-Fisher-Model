@@ -2,11 +2,11 @@
     "display_fixation":1,
     "n": 3,
     "initial_distance": 20,
-    "mutation_methods": ["multiplication","reset", "duplication", "deletion"],
+    "mutation_methods": ["angular", "duplication", "deletion"],
     "sigma_add": 1e-2,
     "duplication_rate": 2e-2,
     "deletion_rate": 2e-2,
-    "reset_rate" : 1e-3,
+    "reset_rate" : 1e-2,
     "reset_size" : 1e-2,
     "initial_gene_method": "random",
     "sigma_mult": 1e-1

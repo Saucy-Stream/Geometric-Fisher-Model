@@ -327,9 +327,8 @@ def test_methods(fgm_args : dict, tested_methods : list[list[str]], nb_tests : i
                 modularities[i,j] = fgm.modularities[fgm.current_time-1]
                 fixation_times[i,j] = fgm.current_time
                 number_of_genes[i,j] = fgm.nb_genes[fgm.current_time-1]
-                print(f"Method {methods} {100*j/nb_tests :.2f}% done!", end = "\r")
-            print(f"Method {methods} done!",end = "\n")
-
+                print(f"\rMethod {methods} {100*(j+1)/nb_tests :.0f}% done!", end = '')
+            print()
         with open("test_object", "wb") as file:
             pickle.dump([modularities,fixation_times,number_of_genes],file,pickle.HIGHEST_PROTOCOL)
         return
@@ -345,44 +344,46 @@ def test_methods(fgm_args : dict, tested_methods : list[list[str]], nb_tests : i
     fixation_times = np.zeros(shape = (m, nb_tests))
     number_of_genes = np.zeros(shape = (m, nb_tests))
 
-    renew_data = input("Renew test data? (leave empty if no): ")
+    renew_data = input("Renew data for modularity test of different mutational methods? (leave empty if no): ")
     if renew_data:
         new_data()
-    
+
     with open("test_object", 'rb') as file:
         modularities, fixation_times, number_of_genes = pickle.load(file)
     
-        fig1 = plt.figure(figsize= (10,4))
-    ax = fig1.subplots()
-    ax.set_xlabel("Methods used")
-    ax.set_ylabel("Final modlarity")
-    ax.set_title(f"Simulations reaching a fitness of {fitness_limit}")
-    ax.grid()
+    fig1 = plt.figure(figsize= (10,4))
+    ax1 = fig1.subplots()
+    ax1.boxplot(modularities.T, tick_labels=["Angular","Multiplication + addition", "Only addition"], positions=np.arange(1,m+1))
+    ax1.set_ylim([-0.1,1.1])
+    ax1.set_xlabel("Methods used")
+    ax1.set_ylabel("Final modlarity")
+    ax1.set_title(f"Simulations reaching a fitness of {fitness_limit}")
+    ax1.grid()
+    
 
     fig2 = plt.figure(figsize= (10,4))
     ax2 = fig2.subplots()
     ax2.set_xlabel("Number of genes")
     ax2.set_title(f"Distribution of number of genes at fitness {fitness_limit}")
     ax2.grid()
-    ax2.hist(number_of_genes.T,bins = "auto", label = ["Multiplication + resets","Multiplication + addition", "Only addition"])
+    ax2.hist(number_of_genes.T,bins = "auto", label = ["Angular","Multiplication + addition", "Only addition"])
     ax2.legend()
-    ax.boxplot(modularities.T, tick_labels=["Multiplication + resets","Multiplication + addition", "Only addition"], positions=np.arange(1,m+1))
-    ax.set_ylim([-0.1,1.1])
-    # print(nb_genes)
+
     fig1.tight_layout()
-    fig2.tight_layout()    
+    fig2.tight_layout()
 
     if with_random:
         mods = np.zeros(nb_tests)
         n = fgm_args["n"]
-        for i in range(nb_tests):
+        for i,nb_genes in enumerate(number_of_genes[0]):
             #TODO: change the distribution of the number of vectors created to better match actual data
-            v = np.random.normal(0,1,(np.random.randint(1,101),n))
+            v = np.random.normal(0,1,(int(nb_genes),n))
             modularity = find_modularity(v)
             mods[i] = modularity
-        ax.boxplot(mods,tick_labels=[f"Random sets of {n}-dimensional genes"], positions = [m+1])
+        ax1.boxplot(mods,tick_labels=[f"Random sets of {n}-dimensional genes"], positions = [m+1])
 
-
+    fig1.savefig("Figures/modularity_of_different_mutation_types")
+    fig2.savefig("Figures/distribution_amount_of_genes")
 
     
     return 
@@ -442,11 +443,11 @@ if __name__ == "__main__":
     with open("Parameters.json", 'rb') as file:
         args = json.load(file)
     # test_fixation_time(args, ns = range(2,103,5), nb_tests = 10, fitness_limit = 0.95)
-    tested_methods = [["multiplication","reset", "duplication", "deletion"],
+    tested_methods = [["angular", "duplication", "deletion"],
                       ["addition","multiplication", "duplication", "deletion"],
                       ["addition","duplication", "deletion"]]
-    test_methods(args,tested_methods, nb_tests = 100, fitness_limit= 0.9)
+    # test_methods(args,tested_methods, nb_tests = 100, fitness_limit= 0.9)
 
-    # show_simulation_results(fgm)
+    show_simulation_results(fgm)
 
     plt.show()
