@@ -155,11 +155,11 @@ class FisherGeometricModel() :
         """
 
         if method == "random" :
-            s = -1 
-            while s < 0 : # we consider that the first gene must be at least neutral or beneficial so that the organism survive
+            s = True
+            while s: # we consider that the first gene must be at least neutral or beneficial so that the organism survive
                 gene = np.random.normal(0, self.sigma_add, self.dimension) # We draw the gene as if it was a mutation of the starting point in the Standart FGM
                 new_pos = self.init_pos + gene # compute the new phenotypic position after adding the gene 
-                s = self.fitness_effect(self.fitness_calc(self.init_pos), self.fitness_calc(new_pos)) # compute the fitness effect of such a gene.
+                s = np.linalg.norm(self.init_pos) < np.linalg.norm(new_pos) # compute the fitness effect of such a gene.
             # print(np.linalg.norm(gene))
             
         
@@ -187,122 +187,7 @@ class FisherGeometricModel() :
                 s = self.fitness_effect(self.fitness_calc(self.init_pos), self.fitness_calc(new_pos)) # Compute the fitness effect (should be highly beneficial)
             
              
-        
-        elif method == "orthogonal" :
-            # methode 1 : (en partant sur un axe du graphique)
-            # gene = np.ones(self.dimension) * (-r * self.sigma_add / np.sqrt(self.dimension))
-            # gene[0] *= 0 # 0 si on part sur un axe (mettre toutes les valeurs à 0 sauf 1 dans init_pos). Dans ce cas le gène est délétère : il est supprimer et rien ne peut se faire de mieux ensuite.
-            # si on utilise cette méthode sans partir sur un axe, le gène est quasiment bien aligné, dans ce cas c'est un peu comme parallele : bcp de duplication au début, mais ensuite mute un peu et supprime les gènes mauvais ?
-            
-            # methode 2 : ( modifier deux directions suffit ?)
-            # gene[0] -= r * self.sigma_add / sqrt(2)
-            # gene[1] += r * self.sigma_add / sqrt(2)
-
-            # methode 3 : calcul du gradient de f permettant de connaitre la direction de variation la plus forte de f = l'axe optimal
-            grad = self.fitness_gradient(self.init_pos) # gradient of the fitness function
-            gene = np.random.normal(0, 1, self.dimension)  # Random direction
-
-            grad_norm = np.linalg.norm(grad)
-            if grad_norm > 0:
-                grad_unit = grad / grad_norm # Normalize to unit length
-                gene = gene - np.dot(gene, grad_unit) * grad_unit # Project the gene onto the space orthogonal to the gradient
-
-            gene = gene / np.linalg.norm(gene)  # Normalize to unit length
-            gene = gene * self.sigma_add  # Scale to the desired length
-
-            new_pos = self.init_pos + gene
-            s = self.fitness_effect(self.fitness_calc(self.init_pos), self.fitness_calc(new_pos)) # compute its fitness effect (should be little deleterious)
-            # print(s)
-            # à voir ce qu'il se passerait si on autorisait pas la deletion du seul gène que l'individu possède.
-            
-             
-        
-        elif method == "only_one_deleterious_direction" :
-            # Methode 1 : If the initial position is on a "diagonal" of the graph (positive quadrant)
-            # gene = np.ones(self.dimension) * (-r * self.sigma_add / np.sqrt(self.dimension))
-            # gene[0] *= -1
-
-            # Methode 2 : with grad f :
-            grad = self.fitness_gradient(self.init_pos) # gradient of the fitness function
-            gene = np.random.normal(0, 1, self.dimension)  # Random direction
-
-            grad_norm = np.linalg.norm(grad)
-            if grad_norm > 0:
-                grad_unit = grad / grad_norm # Normalize to unit length
-                gene = np.dot(gene, grad_unit) * grad_unit # Project the gene onto the axe of the gradient
-
-            gene = gene / np.linalg.norm(gene)  # Normalize to unit length
-            gene = gene * self.sigma_add  # Scale to the desired length
-            # Construct the gene as if it was parallel to the optimal axes
-            
-            gene[0] *= -1 # only make one dimension wrong
-
-            new_pos = self.init_pos + gene
-            s = self.fitness_effect(self.fitness_calc(self.init_pos), self.fitness_calc(new_pos)) # Compute the fitness effect (should be beneficial, but less than if it was optimal)
-            # print(s)
-
-             # mute a little to correct direction, then makes a lot of duplication, then delete some genes (+mute and duplicate) == get ride of the bad genes, then mute a lot
-        
-        elif method == "neutral" : # Move the initial position on the same isocline of fitness
-            grad = self.fitness_gradient(self.init_pos) # gradient of the fitness function
-
-            s = -1
-            while s < 0 : # Because of rounding, the computer may not find a fitness effect of exactly 0. We then try to find at least a gene that is not deleterious
-                random_vect = np.random.normal(0, 1, self.dimension)  # Random direction
-
-                grad_norm = np.linalg.norm(grad)
-                if grad_norm > 0:
-                    grad_unit = grad / grad_norm # Normalize to unit length
-                    random_vect = random_vect - np.dot(random_vect, grad_unit) * grad_unit # Project the vector onto the space orthogonal to the gradient
-                    orthogonal_unit = random_vect / np.linalg.norm(random_vect) # unit vector of the axis orthogonal to the optimal axe
-                
-                z = self.sigma_add # Wanted size of the gene
-                d = np.linalg.norm(self.init_pos) # Wanted distance to the optimum
-                triangle_surface = z/2 * np.sqrt(d**2 - z**2 / 4) # Geometricaly, the gene vector and the axes linking the initial position / the position after adding the gene to the optimum form an isosceles triangle
-                # there are different way of computing a triangle surface, which help us to find angles from the known distances
-                sinus_gamma = 2*triangle_surface/d**2 
-                gamma = np.arcsin(sinus_gamma) # angle between the optimal axes before and after adding the gene
-                theta = (np.pi - gamma) / 2 # angle between the optimal axe and the gene vector
-
-                gene = z*np.cos(theta)*grad_unit + z*np.sin(theta)*orthogonal_unit # coordinate of the gene vector using optimal axe and its orthogonal axe
-
-                new_pos = self.init_pos + gene
-                s = self.fitness_effect(self.fitness_calc(self.init_pos), self.fitness_calc(new_pos)) # Compute its fitness effect (should be 0 or very near)
-            # print(s)
-
-            
-            # methode 2 : avec l'analyse mathématique sur les duplications benefiques : 
-            # cos(theta) = z/(2*d) --> pas besoin d'utiliser le triangle isocèle
-        
-        elif method == "semi_neutral" : # the first gene is partially well adapted
-            grad = self.fitness_gradient(self.init_pos) # gradient of the fitness function
-
-            s = -1
-            while s < 0 : # Because of rounding, the computer may not find a fitness effect of exactly 0. We then try to find at least a gene that is not deleterious
-                random_vect = np.random.normal(0, 1, self.dimension)  # Random direction
-
-                grad_norm = np.linalg.norm(grad)
-                if grad_norm > 0:
-                    grad_unit = grad / grad_norm # Normalize to unit length
-                    random_vect = random_vect - np.dot(random_vect, grad_unit) * grad_unit # Project the vector onto the space orthogonal to the gradient
-                    orthogonal_unit = random_vect / np.linalg.norm(random_vect) # unit vector of the axis orthogonal to the optimal axe
-                
-                z = self.sigma_add # Wanted size of the gene
-                d = np.linalg.norm(self.init_pos) # Wanted distance to the optimum
-                #QUESTION: How does this triangle equation work? Vsiualisation?
-                triangle_surface = z/2 * np.sqrt(d**2 - z**2 / 4) # Geometricaly, the gene vector and the axes linking the initial position / the position after adding the gene to the optimum form an isosceles triangle
-                # there are different way of computing a triangle surface, which help us to find angles from the known distances
-                sinus_gamma = 2*triangle_surface/d**2 
-                gamma = np.arcsin(sinus_gamma) # angle between the optimal axes before and after adding the gene
-                theta = (np.pi - gamma) / 2 # angle between the optimal axe and the gene vector if the gene is neutral
-                theta /= 2 # semi neutral gene : its angle is divided by 2 by comparison to a neutral gene
-
-                gene = z*np.cos(theta)*grad_unit + z*np.sin(theta)*orthogonal_unit # coordinate of the gene vector using optimal axe and its orthogonal axe
-
-                new_pos = self.init_pos + gene
-                s = self.fitness_effect(self.fitness_calc(self.init_pos), self.fitness_calc(new_pos)) # Compute its fitness effect (should be positive but not very large (less than for parallel and only_one_deleterious))
-            # print(s)
-
+    
         return gene
 
     def fitness_gradient(self, position : np.array) -> np.array:
@@ -623,6 +508,7 @@ class FisherGeometricModel() :
         """
 
         #Add extra space to the different vectors so they can fit new simulation data
+        time_step = int(time_step)
         self.extend_data(time_step)
 
         time = self.current_time
@@ -643,16 +529,14 @@ class FisherGeometricModel() :
 
         mutated_genes = self.genes
         mutation_occured = np.full(len(self.mutation_functions), fill_value= False)
-        any_fixation = False
         for i, mutation in enumerate(self.mutation_functions):
             mutated_genes, mut = mutation(self.genes)
             if  mut and self.fixation_check(mutated_genes):
                 # print(mutation)
-                any_fixation = True
                 self.fixation(mutated_genes)
-                mutation_occured[i] = mut
+                mutation_occured[i] = True
         
-        if any_fixation:
+        if any(mutation_occured):
             self.methods[time] = np.array(mutation_occured)
             self.fitness[time] = self.current_fitness
             self.nb_genes[time] = len(self.genes)
@@ -691,8 +575,9 @@ class FisherGeometricModel() :
         """
         new_pos = self.init_pos + np.sum(new_genes, axis = 0)
 
-        new_fitness  = self.fitness_calc(new_pos) # its new fitness
-        if new_fitness > self.current_fitness:
+        
+        # new_fitness  = self.fitness_calc(new_pos) # its new fitness
+        if np.linalg.norm(new_pos) < np.linalg.norm(self.current_pos):
             return True
         else:
             return False
@@ -765,6 +650,21 @@ class FisherGeometricModel() :
         partition = nx.community.louvain_communities(graph)
 
         return partition
+    
+    def reinitialize(self):
+        self.genes = np.array([self.genes[-1]])
+        self.init_pos = self.current_pos-self.genes[0]
+        
+        time = self.current_time
+        self.nb_genes[time] = 1
+        self.methods[time] = [False]*len(self.mutation_functions)
+        self.fitness[time] = self.current_fitness
+        self.nb_genes[time] = len(self.genes)
+        self.positions[time] = (self.current_pos)
+        sizes = np.linalg.norm(self.genes, axis = 1)
+        self.mean_size[time] = np.mean(sizes)
+        self.std_size[time] = np.std(sizes)
+        self.modularities[time] = self.find_modularity(self.genes)
 
 
 ####################

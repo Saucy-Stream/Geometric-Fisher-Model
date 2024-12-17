@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import pickle
 import json
+import copy
 
 
 def historicity_test(fgm : FisherGeometricModel):
@@ -156,9 +157,9 @@ def plot_vizualised_path(fgm : FisherGeometricModel) -> None:
     ax.legend()
     return fig
 
-def plotting_size(fgm : FisherGeometricModel):
+def draw_gene_size(fgms : list[FisherGeometricModel], figtitle = "Size and number of genes from simulations"):
     """
-    Plot the evolution of the number of genes (due to duplication and deletion) 
+    Plot the evolution of the number & size of genes (due to duplication and deletion) 
     with respect to time.
     
     Parameters
@@ -176,32 +177,36 @@ def plotting_size(fgm : FisherGeometricModel):
         (show the graph in an other window)
         
     """
-    ci = np.zeros(fgm.current_time)
-    ci[1:] = [1.96*fgm.std_size[k]/np.sqrt(fgm.nb_genes[k]) for k in range(1,fgm.current_time)]
-    list_lower = [fgm.mean_size[i] - ci[i] for i in range(fgm.current_time)]
-    list_upper = [fgm.mean_size[i] + ci[i] for i in range(fgm.current_time)]
-
-    x = np.arange(0, fgm.current_time) # abscisse for the confidence intervals to be plotted
-
     fig = plt.figure(figsize= (10,4))
+    fig.suptitle(figtitle)
 
     ax1 = plt.subplot(1, 2, 1)
-    ax1.plot(fgm.nb_genes)
     ax1.set_xlabel('Time')
-    ax1.set_ylabel('Number of genes in the genotype')
-    ax1.set_title('Evolution of the Number of genes with Time')
+    ax1.set_ylabel('Genes')
+    ax1.set_title('Number of genes')
     ax1.set_xscale("log")
     ax1.grid()
 
     ax2 = plt.subplot(1, 2, 2)
-    ax2.plot(fgm.mean_size)
-    ax2.fill_between(x, list_lower, list_upper, alpha = .1)
+
     ax2.set_xlabel('Time')
-    ax2.set_ylabel('Mean size of genes in the genotype')
-    ax2.set_title('Evolution of the size of genes with Time')
+    ax2.set_ylabel('Mean size')
+    ax2.set_title('Size of genes')
     ax2.set_xscale("log")
     ax2.grid()
     
+    for i,fgm in enumerate(fgms):
+        ax1.plot(fgm.nb_genes, label = f"Run {i+1}")
+        ax2.plot(fgm.mean_size, label = f"Run {i+1}")
+        ci = np.zeros(fgm.current_time)
+        ci[1:] = [1.96*fgm.std_size[k]/np.sqrt(fgm.nb_genes[k]) for k in range(1,fgm.current_time)]
+        list_lower = [fgm.mean_size[i] - ci[i] for i in range(fgm.current_time)]
+        list_upper = [fgm.mean_size[i] + ci[i] for i in range(fgm.current_time)]
+
+        x = np.arange(0, fgm.current_time) # abscisse for the confidence intervals to be plotted
+        ax2.fill_between(x, list_lower, list_upper, alpha = .1)
+    ax1.legend()
+    ax2.legend()
     return fig
 
 def draw_gene_trait_graph(fgm : FisherGeometricModel) -> None:
@@ -401,24 +406,68 @@ def draw_phenotype_size(fgm : FisherGeometricModel):
     return fig
 
 
-def draw_modularity_plot(fgm:FisherGeometricModel):
-    fig = plt.figure(figsize = (10,4))
-    ax1 = plt.subplot()
-    ax2 = plt.twinx(ax1)
+def draw_distance_plot(fgms: list[FisherGeometricModel], title :str = "Distance to the optimum"):
+    fig= plt.figure(figsize = (10,4))
+    ax = fig.subplots()    
     
-    y1 = fgm.modularities
-    y2 = fgm.fitness
-    x = np.arange(fgm.current_time+1)
+    for i,fgm in enumerate(fgms):
+        y2 = np.linalg.norm(fgm.positions, axis=1)
+        x = np.arange(fgm.current_time+1)
 
-    line1, = ax2.plot(x,y1,color = 'r', label = "Modularity")
-    line2, = ax1.plot(x,y2,color = 'b', label = 'Fitness')
-    ax2.set_xscale('log')
-    ax2.set_ylim([0,1])
-    ax1.set_yscale('log')
-    ax1.grid()
-    ax1.legend(handles = [line1,line2],loc = "lower right")
+        ax.plot(x,y2, label = f'Run {i+1}')
+    ax.set_ylabel("Distance")
+    ax.set_xlabel("Time")
+    ax.set_title(title)
+    ax.set_yscale('log')
+    ax.grid()
+    ax.legend()
 
     return fig
+
+def test_deletion_probabilities(fgm_args : dict, nb_tests : int = 100, fitness_limit : float = 0.9):
+    if input("Do you want to generate new data for the deletion tests? (leave empty if no)"):
+        fgm_args["display_fixation"] = False
+        deletions = np.zeros(nb_tests)
+        deletion_index = fgm_args["mutation_methods"].index("deletion")
+        for i in range(nb_tests):
+            fgm = FisherGeometricModel(**fgm_args)
+            fgm.evolve_until_fitness(fitness_limit)
+            deletions[i] = sum(fgm.methods[:,deletion_index])
+            print(f"\rDeletion tests {100*(i+1)/nb_tests :.0f}% done!", end = '')
+        with open("deletion_data", "wb") as file:
+            pickle.dump(deletions,file,pickle.HIGHEST_PROTOCOL)
+    else:
+        with open("deletion_data", "rb") as file:
+            deletions = pickle.load(file)
+    
+    fig = plt.figure(figsize= (10,4))
+    ax = fig.subplots()
+    # ax.grid()
+    ax.set_xlabel("Deletions")
+    ax.set_ylabel("Frequency")
+    ax.set_title(f"Deletion fixation for {nb_tests} simulations in n = {fgm_args['n']} with starting distance = {fgm_args['initial_distance']}")
+    ax.hist(deletions, color = 'r', ec='k')
+    fig.savefig(f"Figures/deletion_histogram_n_{fgm_args['n']}")
+
+def test_effect_of_genome_size(fgm_args : dict, generations_until_reset : int, following_generations : int):
+    generations_until_reset = int(generations_until_reset)
+    following_generations = int(following_generations)
+
+    fgm = FisherGeometricModel(**fgm_args)
+    fgm.evolve_successive(generations_until_reset)
+    fgm_2 = copy.deepcopy(fgm)
+    fgm_2.reinitialize()
+
+    fgm.evolve_successive(following_generations)
+    fgm_2.evolve_successive(following_generations)
+
+    fgms = [fgm, fgm_2]
+    fig1 = draw_distance_plot(fgms, title = f"Distance to the optimum with n = {fgm_args['n']} and a reset at t={generations_until_reset}")
+    fig1.savefig(f"Figures/reset_t_{generations_until_reset}")
+
+    fig2 = draw_gene_size(fgms, figtitle= f"Number and size of genes with n = {fgm_args['n']} and a reset at t={generations_until_reset}")
+    fig2.savefig(f"Figures/gene_size_t_{generations_until_reset}")
+
 
 def show_simulation_results(fgm : FisherGeometricModel):
     # print(f"Number of genes in time: {fgm.nb_genes}")
@@ -430,10 +479,10 @@ def show_simulation_results(fgm : FisherGeometricModel):
     print(f"Inital beneficial directions: {fgm.initial_beneficial_directions}")
     # print(f"Genes : {fgm.genes}")
     # print(f"Initial position: {fgm.init_pos}")
-    plotting_size(fgm)
+    draw_gene_size(fgm)
     plot_vizualised_path(fgm)
     # # draw_gene_trait_graph(fgm)
-    draw_modularity_plot(fgm)
+    draw_distance_plot(fgm)
     return
 
 if __name__ == "__main__":
@@ -441,13 +490,17 @@ if __name__ == "__main__":
         fgm :FisherGeometricModel = pickle.load(file)
 
     with open("Parameters.json", 'rb') as file:
-        args = json.load(file)
+        fgm_args : dict = json.load(file)
     # test_fixation_time(args, ns = range(2,103,5), nb_tests = 10, fitness_limit = 0.95)
     tested_methods = [["angular", "duplication", "deletion"],
                       ["addition","multiplication", "duplication", "deletion"],
                       ["addition","duplication", "deletion"]]
-    # test_methods(args,tested_methods, nb_tests = 100, fitness_limit= 0.9)
+    # test_methods(fgm_args,tested_methods, nb_tests = 100, fitness_limit= 0.9)
 
-    show_simulation_results(fgm)
+    # show_simulation_results(fgm)
+
+    # test_effect_of_genome_size(fgm_args,generations_until_reset = 5e2,following_generations = 1e3)
+
+    test_deletion_probabilities(fgm_args)
 
     plt.show()
