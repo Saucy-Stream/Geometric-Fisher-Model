@@ -349,7 +349,7 @@ def test_methods(fgm_args : dict, tested_methods : list[list[str]], nb_tests : i
     fixation_times = np.zeros(shape = (m, nb_tests))
     number_of_genes = np.zeros(shape = (m, nb_tests))
 
-    renew_data = input("Renew data for modularity test of different mutational methods? (leave empty if no): ")
+    renew_data = input("Renew data for test of different mutational methods? (leave empty if no): ")
     if renew_data:
         new_data()
 
@@ -479,10 +479,10 @@ def show_simulation_results(fgm : FisherGeometricModel):
     print(f"Inital beneficial directions: {fgm.initial_beneficial_directions}")
     # print(f"Genes : {fgm.genes}")
     # print(f"Initial position: {fgm.init_pos}")
-    draw_gene_size(fgm)
+    draw_gene_size([fgm])
     plot_vizualised_path(fgm)
     # # draw_gene_trait_graph(fgm)
-    draw_distance_plot(fgm)
+    draw_distance_plot([fgm])
     return
 
 if __name__ == "__main__":
@@ -492,15 +492,15 @@ if __name__ == "__main__":
     with open("Parameters.json", 'rb') as file:
         fgm_args : dict = json.load(file)
     # test_fixation_time(args, ns = range(2,103,5), nb_tests = 10, fitness_limit = 0.95)
-    tested_methods = [["angular", "duplication", "deletion"],
-                      ["addition","multiplication", "duplication", "deletion"],
+    tested_methods = [["addition"],
+                      ["addition","duplication"],
                       ["addition","duplication", "deletion"]]
     # test_methods(fgm_args,tested_methods, nb_tests = 100, fitness_limit= 0.9)
+    show_simulation_results(fgm)
 
-    # show_simulation_results(fgm)
 
     # test_effect_of_genome_size(fgm_args,generations_until_reset = 5e2,following_generations = 1e3)
 
-    test_deletion_probabilities(fgm_args)
+    # test_deletion_probabilities(fgm_args)
 
     plt.show()

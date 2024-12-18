@@ -39,24 +39,22 @@ def numeric_test(r,d_1,n, tests = 1e5):
 
 
 def plot_numerical(n = 10):
-    l = 50
+    l = 10
     d_1 = 1
     rs = np.linspace(0.01,0.9, l)
 
     test_data = np.zeros(l)
-    analytical_data = np.zeros(l)
     for i,r in enumerate(rs):
-        test_data[i] = numeric_test(r,d_1,n, tests = 10000)
-        analytical_data[i] = analytical_sol(n,r)
+        test_data[i] = numeric_test(r,d_1,n, tests = 100000)
         print(f"r = {r} done")
 
     fig = plt.figure(figsize = (10,8))
     ax = plt.subplot()
-    ax.plot(rs,analytical_data, c = "k", label = "Analytic solution")
     ax.plot(rs,test_data, c = "r", label = "Numerical data")
     ax.set_xlabel("Size of genes (r/d)")
     ax.set_ylabel("Proportion of beneficial deletions")
     ax.set_title(f"Numerical probability of deletion in dimension n = {n}")
+    ax.set_yscale("log")
     ax.grid()
     ax.legend()
     return fig
@@ -80,29 +78,7 @@ def del_prob(th,r,n):
     prob = nom/den
     return prob
 
-def analytical_sol(n = 5, r = 0.1):
-    thmax = np.arccos(r/2)
-    thdup = np.arccos(3*r/2)
 
-    l = 1000
-    ths = np.linspace(0,thmax,l)
-    split = np.searchsorted(ths, thdup)
-
-    #inside beneficial duplication range:
-
-    th1 = ths[:split]
-    ys = del_prob(th1,r,n)
-    prob = np.trapezoid(ys,th1)
-
-
-
-
-    #outside beneficial duplication range:
-    # th2 = ths[split:]
-    # d2 = np.sqrt(r*r+1+2*r*np.cos(th2))
-    # possible_ph_2 = 2*ben(r,d2)
-    # y_denom = np.sin(ths)**(n-2)
-    return prob
 
 def plot_probability_heatmap():
     r_values = np.linspace(0.01, np.sqrt(2), 30)
@@ -131,9 +107,9 @@ def plot_probability_heatmap():
 
 
 if __name__ == "__main__":
-    # plot_numerical(n = 2)
+    plot_numerical(n = 640)
     # print(numeric_test(0.1,1,2))
-    plot_probability_heatmap()
+    # plot_probability_heatmap()
     # analytical_sol(2)
 
     # print(del_prob(np.pi/3,0.01,2))
