@@ -1,9 +1,9 @@
 {
     "display_fixation":1,
-    "n": 10,
-    "initial_distance": 100,
-    "mutation_methods": ["addition", "duplication", "deletion"],
-    "sigma_add": 1e-2,
+    "n": 30,
+    "initial_distance": 10,
+    "mutation_methods": ["addition","duplication"],
+    "sigma_add": 1e-1,
     "duplication_rate": 2e-2,
     "deletion_rate": 2e-2,
     "reset_rate" : 1e-2,

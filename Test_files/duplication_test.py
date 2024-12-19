@@ -18,6 +18,8 @@ def numeric_test(r,d_1,n, tests = 1e5):
     return success / tests
 
 def analytical_probability(r, d_1, n):
+    if r >= 2/3*d_1:
+        return 0
     N = 1000
 
     x_1 = np.linspace(0, np.arccos(r / (2 * d_1)), N)

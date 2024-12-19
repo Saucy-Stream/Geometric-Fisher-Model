@@ -5,6 +5,7 @@ import networkx as nx
 import pickle
 import json
 import copy
+from Test_files.mutation_test import analytical_simulation
 
 
 def historicity_test(fgm : FisherGeometricModel):
@@ -127,7 +128,7 @@ def plot_vizualised_path(fgm : FisherGeometricModel) -> None:
         ax = fig.add_subplot(projection = '3d')
         kwargs = {'color': 'k'}
     else:
-        print("Unable to plot a visalization graph when dimensions > 3")
+        print("Unable to plot a visualization graph when dimensions > 3")
         return
     
     unique_positions = np.array([pos for i,pos in enumerate(fgm.positions) if sum(fgm.methods[i])>0])
@@ -406,8 +407,8 @@ def draw_phenotype_size(fgm : FisherGeometricModel):
     return fig
 
 
-def draw_distance_plot(fgms: list[FisherGeometricModel], title :str = "Distance to the optimum"):
-    fig= plt.figure(figsize = (10,4))
+def draw_distance_plot(fgms: list[FisherGeometricModel], with_analytical = False, title :str = "Distance to the optimum"):
+    fig = plt.figure(figsize = (10,4))
     ax = fig.subplots()    
     
     for i,fgm in enumerate(fgms):
@@ -415,13 +416,24 @@ def draw_distance_plot(fgms: list[FisherGeometricModel], title :str = "Distance 
         x = np.arange(fgm.current_time+1)
 
         ax.plot(x,y2, label = f'Run {i+1}')
+        if with_analytical:
+            args = fgm.get_args()
+            if "duplication" in args["mutation_methods"]:
+                with_duplication = True
+            else:
+                with_duplication = False
+            duplication_rate = args["duplication_rate"] if with_duplication else 0
+            analytical_sol = analytical_simulation(args["n"], args["initial_distance"], args["sigma_add"],fgm.current_time+1, with_duplication=with_duplication, duplication_rate=duplication_rate)
+            ax.plot(x,analytical_sol, label = f"Analytical solution {(not with_duplication)*'(no duplication) '}for run {i+1}")
+
     ax.set_ylabel("Distance")
     ax.set_xlabel("Time")
     ax.set_title(title)
     ax.set_yscale('log')
+    ax.set_xscale("log")
     ax.grid()
     ax.legend()
-
+    fig.savefig("Figures/distance_to_optimum")
     return fig
 
 def test_deletion_probabilities(fgm_args : dict, nb_tests : int = 100, fitness_limit : float = 0.9):
@@ -485,6 +497,59 @@ def show_simulation_results(fgm : FisherGeometricModel):
     draw_distance_plot([fgm])
     return
 
+def test_analytical_vs_numerical(fgm_args: dict, num_runs: int = 100, time_steps: int = 1000):
+    """
+    Compare the analytical solution with numerical simulations of the FisherGeometricModel.
+    
+    Parameters:
+    - fgm_args: dict, arguments for initializing the FisherGeometricModel
+    - num_runs: int, number of numerical simulations to run
+    - time_steps: int, number of time steps for the simulation
+    
+    Returns:
+    - fig: matplotlib figure, the comparison plot
+    """
+    n = fgm_args['n']
+    fgm_args['display_fixation'] = False
+    initial_distance = fgm_args['initial_distance']
+    sigma_add = fgm_args['sigma_add']
+    duplication_rate = fgm_args.get('duplication_rate', 0.02)
+    with_duplication = "duplication" in fgm_args['mutation_methods']
+
+    # Analytical solution
+    analytical_distances = analytical_simulation(n, initial_distance, sigma_add, time_steps, with_duplication, duplication_rate)
+
+    # Numerical simulations
+    numerical_distances = np.zeros((num_runs, time_steps+2))
+    for run in range(num_runs):
+        fgm = FisherGeometricModel(**fgm_args)
+        fgm.evolve_successive(time_steps)
+        numerical_distances[run] = np.linalg.norm(fgm.positions, axis=1)
+        print(f"Run {run + 1}/{num_runs} completed", end="\r")
+
+    # Plotting the results
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_subplot()
+
+    # Plot analytical solution
+    ax.plot(range(time_steps), analytical_distances, label="Analytical solution", color="k")
+
+    # Plot numerical simulations
+    for run in range(num_runs):
+        ax.plot(range(time_steps+2), numerical_distances[run], color="r", alpha=0.1)
+    ax.plot(range(time_steps+2), np.mean(numerical_distances, axis=0), label="Average of Numerical simulations", color="r")
+    
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Distance to the optimum")
+    ax.set_yscale("log")
+    ax.set_xscale("log")
+    ax.set_title("Comparison of Analytical Solution and Numerical Simulations")
+    ax.legend()
+    ax.grid()
+
+    fig.savefig("Figures/analytical_vs_numerical_comparison")
+    return fig
+
 if __name__ == "__main__":
     with open('FisherObject', 'rb') as file:
         fgm :FisherGeometricModel = pickle.load(file)
@@ -496,11 +561,12 @@ if __name__ == "__main__":
                       ["addition","duplication"],
                       ["addition","duplication", "deletion"]]
     # test_methods(fgm_args,tested_methods, nb_tests = 100, fitness_limit= 0.9)
-    show_simulation_results(fgm)
+    # show_simulation_results(fgm)
 
 
     # test_effect_of_genome_size(fgm_args,generations_until_reset = 5e2,following_generations = 1e3)
 
     # test_deletion_probabilities(fgm_args)
 
+    test_analytical_vs_numerical(fgm_args, num_runs=100, time_steps=1000)
     plt.show()

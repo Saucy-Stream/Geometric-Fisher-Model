@@ -240,40 +240,6 @@ class FisherGeometricModel() :
             x[n] = r*a1*a2
         x[-1] = r*np.prod(np.sin(spherical_coordinates[1:]))
         return x
-
-    def multiplicative_point_mutation(self, current_genes : np.ndarray[np.ndarray[float]]):
-        """
-        Randomly mutate every genes in the genotype by multiplying a gaussian noise to them. The mutation
-        may differ from one gene to another. We consider in this case that the mutation rate is per genome
-        and have a value of 1, meaning that each gene in the genome gets mutated exactly once per generation.
-
-        Parameters
-        ------
-        current_genes : np.ndarray[np.ndarray[float]]
-            List of genes to be duplicated
-        The useful parameters here are dimension, sigma_add
-
-        Return :
-        ------ 
-        list_genes : np.ndarray[np.ndarray[float]]
-            List of 1-dimensional numpy array of size n (dimension of the phenotypic space) representing the genes
-            after mutation.
-        mut : boolean
-            Always put at true in this version because there is 1 mutation per generation (iteration)
-
-        """
-        new_genes = current_genes.copy()
-        n = len(new_genes)
-        mutations = np.random.lognormal(0,self.sigma_mult, size = (n, self.dimension))
-
-        # if any(mutations.flatten() < 0):
-        #     flips = [i for i,mut in enumerate(mutations.flatten()) if mut<0]
-        #     print(f"flipped genes: {new_genes.flatten()[flips]}, mutations: {mutations.flatten()[flips]}")
-        
-        new_genes *= mutations
-        
-        mut = True
-        return new_genes, mut
     
     def addative_point_mutation(self, current_genes : np.ndarray[np.ndarray[float]]):
         """
@@ -326,16 +292,15 @@ class FisherGeometricModel() :
         """
         n = len(current_genes)
         list_genes = np.array(current_genes.copy()) # make a copy of the initial list of genes so that it is not changed if the modification are not fixed afterward
-        nb_dupl = np.random.poisson(self.duplication_rate*n) # number of duplication to do. the rate is multiply by the number of gene and the size of the population so that it represent the number of duplication per generation.
+        duplication_occurred = np.random.rand() < self.duplication_rate*n # number of duplication to do. the rate is multiply by the number of gene and the size of the population so that it represent the number of duplication per generation.
 
-        if nb_dupl > 0:
-            actual_duplications = min(n, nb_dupl)
-            added_gene_index = np.random.choice(range(n),actual_duplications,replace = True)
-            added_genes = list_genes[added_gene_index]
-            list_genes = np.concatenate((list_genes,added_genes))
+        if duplication_occurred:
+            added_gene_index = np.random.choice(range(n))
+            added_gene = list_genes[added_gene_index]
+            list_genes = np.concatenate((list_genes,[added_gene]))
             
             # print(f"nr dupl:{nb_dupl}, indices: {added_gene_index}, added genes : {added_genes}, total list : {list_genes}")
-        return list_genes, nb_dupl > 0
+        return list_genes, duplication_occurred
     
     def deletion(self, current_genes : np.ndarray[np.ndarray[float]]):
         """
@@ -358,29 +323,13 @@ class FisherGeometricModel() :
         """
         n = len(current_genes)
         list_genes = np.array(current_genes.copy()) # make a copy of the initial list of genes so that it is not changed if the modification are not fixed afterward
-        nb_del = np.random.poisson(self.deletion_rate*n) # number of duplication to do. the rate is multiply by the number of gene and the size of the population so that it represent the number of duplication per generation.
+        deletion_occurred = np.random.rand() < self.deletion_rate*n  # number of duplication to do. the rate is multiply by the number of gene and the size of the population so that it represent the number of duplication per generation.
 
-        if nb_del > 0:
-            actual_deletions = min(n, nb_del)
-            removed_genes_index = np.random.choice(range(n),actual_deletions,replace = False)
-            list_genes = np.delete(list_genes,removed_genes_index,0)
+        if deletion_occurred:
+            removed_gene = np.random.choice(range(n))
+            list_genes = np.delete(list_genes,removed_gene,0)
 
-        return list_genes, nb_del > 0
-
-    def reset_mutation(self,current_genes: np.ndarray[np.ndarray[float]]):
-        new_genes = np.copy(current_genes)
-        n = len(new_genes)
-        d = self.dimension
-        reset_values = (np.random.randint(0,2, size = (n,d))*2-1)*self.reset_size
-        resets = np.random.binomial(1,self.reset_rate, size = (n,d))
-
-        if (mut := any(resets.flatten())):
-            for i,gene in enumerate(new_genes):
-                for j,reset in enumerate(resets[i]):
-                    if reset:
-                        gene[j] = reset_values[i,j]
-
-        return new_genes, mut
+        return list_genes, deletion_occurred
 
     def fitness_calc(self, position) -> float: # 4sec
         """
