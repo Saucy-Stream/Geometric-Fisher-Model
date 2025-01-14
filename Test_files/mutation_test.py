@@ -100,8 +100,6 @@ def analytical_simulation(n,d,sigma,timestop, with_duplication = True, duplicati
     nb_genes = 1
     if with_duplication:
         for t in range(1,timestop):
-            if t == 179:
-                pass
             average_gene_size = (d-distances[t-1]) / nb_genes
             new_genes = nb_genes*duplication_rate*duplication_probability(average_gene_size,distances[t-1]-average_gene_size,n)
             distances[t] = max(analytical_expectation(n,distances[t-1],sigma*np.sqrt(nb_genes))-average_gene_size*new_genes,0)

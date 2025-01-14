@@ -6,29 +6,9 @@ import pickle
 import json
 import copy
 from Test_files.mutation_test import analytical_simulation
-
-
-def historicity_test(fgm : FisherGeometricModel):
-    """
-    Resumes Evolution after the 10**5 generations to see if there are differences in
-    the evolutionnary path taken
-
-    ------
-    Parameters : 
-        All necessary parameters are fgm defined in the class object (see __init__) : 
-        fitness, genes and current_pos
-    
-    ------
-    Return : 
-        None 
-        Call for evolve_successive again, but with 10**5 less generations 
-    
-    """
-    fgm.fitness = fgm.timestamp_fitness
-    fgm.genes = fgm.timestamp_genes
-    fgm.current_pos = fgm.timestamp_position
-    fgm.current_fitness = fgm.fitness_calc(fgm.current_pos)
-    fgm.evolve_successive(3*10**5)
+from Test_files.duplication_test import analytical_probability
+import seaborn as sns
+import os
 
 def plot_historic_fitness(fgm : FisherGeometricModel, fitness1, fitness2):
     """
@@ -541,13 +521,201 @@ def test_analytical_vs_numerical(fgm_args: dict, num_runs: int = 100, time_steps
     
     ax.set_xlabel("Time")
     ax.set_ylabel("Distance to the optimum")
-    ax.set_yscale("log")
-    ax.set_xscale("log")
+    # ax.set_yscale("log")
+    # ax.set_xscale("log")
     ax.set_title("Comparison of Analytical Solution and Numerical Simulations")
     ax.legend()
     ax.grid()
 
     fig.savefig("Figures/analytical_vs_numerical_comparison")
+    return fig
+
+def compare_analytical_numerical_heatmap(fgm_args: dict, n_values: list[int], distance_values: list[float], num_runs: int = 100, time_steps: int = 1000):
+    """
+    Compare the analytical solution with numerical simulations of the FisherGeometricModel for different values of n and initial distance.
+    
+    Parameters:
+    - fgm_args: dict, arguments for initializing the FisherGeometricModel
+    - n_values: list[int], list of different values for the dimension n
+    - distance_values: list[float], list of different values for the initial distance to the optimum
+    - num_runs: int, number of numerical simulations to run for each combination of n and initial distance
+    - time_steps: int, number of time steps for the simulation
+    
+    Returns:
+    - fig: matplotlib figure, the heatmap plot
+    """
+    heatmap_data = np.zeros((len(n_values), len(distance_values)))
+
+    for i, n in enumerate(n_values):
+        for j, initial_distance in enumerate(distance_values):
+            fgm_args['n'] = n
+            fgm_args['initial_distance'] = initial_distance
+            fgm_args['display_fixation'] = False
+            sigma_add = fgm_args['sigma_add']
+            duplication_rate = fgm_args.get('duplication_rate', 0.02)
+            with_duplication = "duplication" in fgm_args['mutation_methods']
+
+            # Analytical solution
+            analytical_distances = analytical_simulation(n, initial_distance, sigma_add, time_steps, with_duplication, duplication_rate)
+
+            # Numerical simulations
+            numerical_distances = np.zeros((num_runs, time_steps+2))
+            for run in range(num_runs):
+                fgm = FisherGeometricModel(**fgm_args)
+                fgm.evolve_successive(time_steps)
+                numerical_distances[run] = np.linalg.norm(fgm.positions, axis=1)
+                print(f"Run {run + 1}/{num_runs} for n={n}, initial_distance={initial_distance} completed", end="\r")
+
+            # Calculate the average numerical distances
+            avg_numerical_distances = np.mean(numerical_distances, axis=0)
+
+            # Compute the integrated square of the difference
+            diff_squared = np.sum((analytical_distances - avg_numerical_distances[:time_steps])**2)
+            normalized_diff = diff_squared / np.sum(avg_numerical_distances[:time_steps]**2)
+            heatmap_data[i, j] = normalized_diff
+
+    # Plotting the heatmap
+    fig = plt.figure(figsize=(10, 8))
+    ax = sns.heatmap(heatmap_data, cmap='viridis', cbar_kws={'label': 'Normalized Square Difference'})
+
+    ax.set_xticks(np.arange(len(distance_values)) + 0.5)
+    ax.set_xticklabels(distance_values)
+    ax.set_yticks(np.arange(len(n_values)) + 0.5)
+    ax.set_yticklabels(n_values)
+    ax.invert_yaxis()
+    ax.set_xlabel('Initial Distance to Optimum')
+    ax.set_ylabel('Dimension n')
+    ax.set_title('Comparison of Analytical and Numerical Solutions')
+
+    fig.savefig("Figures/analytical_vs_numerical_heatmap")
+    return fig
+
+def save_simulation_data(filename, data):
+    with open(filename, 'wb') as file:
+        pickle.dump(data, file, pickle.HIGHEST_PROTOCOL)
+
+def load_simulation_data(filename):
+    with open(filename, 'rb') as file:
+        return pickle.load(file)
+
+def compare_duplication_probability(fgm_args: dict, num_runs: int = 100, time_steps: int = 1000, save_file: str = "duplication_data.pkl"):
+    """
+    Compare the analytical probability of duplication with actual duplication events during simulation.
+    
+    Parameters:
+    - fgm_args: dict, arguments for initializing the FisherGeometricModel
+    - num_runs: int, number of numerical simulations to run
+    - time_steps: int, number of time steps for the simulation
+    - save_file: str, filename to save/load the simulation data
+    
+    Returns:
+    - fig: matplotlib figure, the 3D histogram plot
+    """
+    n = fgm_args['n']
+    if os.path.exists(save_file):
+        gene_sizes, distances = load_simulation_data(save_file)
+    else:
+        
+        fgm_args['display_fixation'] = False
+        initial_distance = fgm_args['initial_distance']
+        sigma_add = fgm_args['sigma_add']
+        duplication_rate = fgm_args.get('duplication_rate', 0)
+
+        gene_sizes = []
+        distances = []
+
+        for run in range(num_runs):
+            fgm = FisherGeometricModel(**fgm_args)
+            fgm.evolve_successive(time_steps)
+            for event in fgm.duplication_events:
+                if event['fixed']:
+                    gene_sizes.append(np.linalg.norm(event["gene"]))
+                    distances.append(np.linalg.norm([event["distance"]]))
+
+            print(f"Run {run + 1}/{num_runs} completed", end="\r")
+
+        gene_sizes = np.array(gene_sizes)
+        distances = np.array(distances)
+
+        save_simulation_data(save_file, (gene_sizes, distances))
+
+    # Create a 3D histogram
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_subplot(111, projection='3d')
+
+    hist, xedges, yedges = np.histogram2d(gene_sizes, distances, bins=30)
+
+    xpos, ypos = np.meshgrid(xedges[:-1] + 0.25, yedges[:-1] + 0.25, indexing="ij")
+    xpos = xpos.ravel()
+    ypos = ypos.ravel()
+    zpos = 0
+
+    dx = dy = 0.5 * np.ones_like(zpos)
+    dz = hist.ravel()
+
+    ax.bar3d(xpos, ypos, zpos, dx, dy, dz, zsort='average', alpha=0.6)
+
+    # # Overlay the analytical probability
+    # X, Y = np.meshgrid(xedges[:-1], yedges[:-1])
+    # Z = np.zeros_like(X)
+    # for i in range(X.shape[0]):
+    #     for j in range(X.shape[1]):
+    #         Z[i, j] = analytical_probability(X[i, j], Y[i, j], n)
+
+    # ax.plot_surface(X, Y, Z, color='r', alpha=0.5)
+
+    ax.set_xlabel('Gene Size')
+    ax.set_ylabel('Distance to Optimum')
+    ax.set_zlabel('Duplication Events')
+    ax.set_title(f'Observed Fixed Duplication Events for {num_runs} Simulations')
+
+    fig.savefig("Figures/duplication_probability_comparison")
+    return fig
+
+def compare_genome_size_no_duplications(fgm_args: dict, genome_sizes: list[int], num_runs: int = 100, time_steps: int = 1000):
+    """
+    Compare the evolution of distance to the optimum for different genome sizes without duplications.
+    
+    Parameters:
+    - fgm_args: dict, arguments for initializing the FisherGeometricModel
+    - genome_sizes: list[int], list of different initial genome sizes
+    - num_runs: int, number of numerical simulations to run for each genome size
+    - time_steps: int, number of time steps for the simulation
+    
+    Returns:
+    - fig: matplotlib figure, the comparison plot
+    """
+    fgm_args['mutation_methods'] = [method for method in fgm_args['mutation_methods'] if method != 'duplication']
+    fgm_args['display_fixation'] = False
+
+    results = {}
+
+    for genome_size in genome_sizes:
+        distances = np.zeros((num_runs, time_steps+2))
+        for run in range(num_runs):
+            fgm = FisherGeometricModel(**fgm_args)
+            fgm.evolve_successive(time_steps)
+            distances[run] = np.linalg.norm(fgm.positions, axis=1)
+            print(f"Run {run + 1}/{num_runs} for genome size={genome_size} completed", end="\r")
+        results[genome_size] = distances
+
+    # Plotting the results
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_subplot()
+
+    for genome_size, distances in results.items():
+        avg_distances = np.mean(distances, axis=0)
+        ax.plot(range(time_steps+2), avg_distances, label=f"Genome size {genome_size}")
+
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Distance to the optimum")
+    ax.set_yscale("log")
+    ax.set_xscale("log")
+    ax.set_title("Evolution of Distance to the Optimum for Different Genome Sizes (No Duplications)")
+    ax.legend()
+    ax.grid()
+
+    fig.savefig("Figures/genome_size_no_duplications_comparison")
     return fig
 
 if __name__ == "__main__":
@@ -568,5 +736,11 @@ if __name__ == "__main__":
 
     # test_deletion_probabilities(fgm_args)
 
-    test_analytical_vs_numerical(fgm_args, num_runs=100, time_steps=1000)
+    # test_analytical_vs_numerical(fgm_args, num_runs=100, time_steps=1000)
+    # n_values = [3,10, 20, 50, 100, 500]
+    # distance_values = [10, 20, 30, 40, 50, 100]
+    # compare_analytical_numerical_heatmap(fgm_args, n_values, distance_values, num_runs=100, time_steps=1000)
+    # compare_duplication_probability(fgm_args, num_runs=1000, time_steps=1000)
+    genome_sizes = [1, 5, 10, 20]
+    compare_genome_size_no_duplications(fgm_args, genome_sizes, num_runs=100, time_steps=10000)
     plt.show()

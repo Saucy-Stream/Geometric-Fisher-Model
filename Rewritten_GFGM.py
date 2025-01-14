@@ -108,6 +108,7 @@ class FisherGeometricModel() :
         self.nb_genes = [0,1] # gene count at each generation
         self.mean_size = np.array([0,np.linalg.norm(self.genes[0])]) # mean size of the genes at each iteration
         self.std_size = np.array([0,0])
+        self.duplication_events : list[dict]= []
 
         #For saving a timestamp of the process
         self.timestamp = timestamp
@@ -164,82 +165,11 @@ class FisherGeometricModel() :
             
         
         elif method == "parallel" : 
-            # en partant sur une "diagonale" du graphe (cadrant positif)
-            # return np.ones(self.dimension) * (-r * self.sigma_add  / np.sqrt(self.dimension)) # gene on the axe to the optimum (dans le cas où la position choisi est à 45°) : in this case the gene is optimal for adaptation, the simulation only make duplication 
-            # attention dépend à nouveau bcp de la taille du premier gène. S'il est grand, ne fait que des duplications. Si il est petits, c'est assez aléatoire (il y a toujours pas mal de duplication au début mais pas tant que ça)
-            # Dans ce cas comme les mutations sont assez bénéfiques aussi comparé à la duplication elles se fixent aussi ce qui bouge le point de l'axe optimal 
-            
-            grad = self.fitness_gradient(self.init_pos) # gradient of the fitness function
-
-            s = -1
-            while s < 0 : 
-                gene = np.random.normal(0, 1, self.dimension)  # Random direction
-                
-                grad_norm = np.linalg.norm(grad)
-                if grad_norm > 0:
-                    grad_unit = grad / grad_norm # Normalize to unit length
-                    gene = np.dot(gene, grad_unit) * grad_unit # Project the gene onto the axe of the gradient
-
-                gene = gene / np.linalg.norm(gene)  # Normalize to unit length
-                gene = gene * self.sigma_add  # Scale to the desired length
-
-                new_pos = self.init_pos + gene
-                s = self.fitness_effect(self.fitness_calc(self.init_pos), self.fitness_calc(new_pos)) # Compute the fitness effect (should be highly beneficial)
-            
-             
-    
+            gene = -self.init_pos / np.linalg.norm(self.init_pos) * np.random.normal(0,self.sigma_add) # gene on the axe to the optimum             
+            if np.linalg.norm(self.init_pos) < np.linalg.norm(self.init_pos + gene):
+                gene = -gene
         return gene
 
-    def fitness_gradient(self, position : np.array) -> np.array:
-        """
-        Compute the gradient vector of the fitness function at a given position, 
-        which as the same direction as the optimal axe linking the position to the optimum. 
-        (Direction of maximal variation of fitness in the neighborhood of the point)
-
-        ------
-        Parameters :
-            position
-            One dimensional numpy array of size self.dimension representing the actual position in the phenotypic space.
-            Other parameters are self defined in the class object (see __init__). Useful parameters here are
-            alpha and Q. 
-
-        ------
-        Return : 
-            np.array
-            One dimensional Numpy array of size self.dimension representing the gradient vector 
-            of the fitness function, which is just the vector of the partial derivative of the function.
-        """
-        # return -self.Q * self.alpha * position * self.fitness_calc(position) # only true when Q = 2 
-        return -self.Q * self.alpha * position * np.linalg.norm(position)**(self.Q - 2) * self.fitness_calc(position)
-
-    def angular_point_mutation(self,current_genes : np.ndarray[np.ndarray[float]]):
-        new_genes = current_genes.copy()
-
-        for i,gene in enumerate(new_genes):
-            spherical_coords = np.array(self.get_spherical_coordinates(gene))
-            spherical_coords[0] *= np.random.lognormal(0,self.sigma_mult)
-            spherical_coords[1:] += np.random.normal(0,self.sigma_mult*np.pi/2, size = self.dimension-1)
-            new_genes[i] = self.get_carthesian_coordinates(spherical_coords)
-        return new_genes, True
-    
-    def get_spherical_coordinates(self, carthesian_coordinates : np.ndarray[float]):
-        r = np.linalg.norm(carthesian_coordinates)
-        phi = np.zeros(self.dimension-1)
-        for n in range(self.dimension-2):
-            a =np.linalg.norm(carthesian_coordinates[n+1:])
-            phi[n] = np.arctan2(a,carthesian_coordinates[n])
-        phi[-1] = np.arctan2(carthesian_coordinates[-1],carthesian_coordinates[-2])
-        return r,*phi
-
-    def get_carthesian_coordinates(self, spherical_coordinates: np.ndarray[float]):
-        x = np.zeros(self.dimension)
-        r = spherical_coordinates[0]
-        for n in range(self.dimension-1):
-            a1 = np.cos(spherical_coordinates[n+1])
-            a2 = np.prod(np.sin(spherical_coordinates[1:n+1]))
-            x[n] = r*a1*a2
-        x[-1] = r*np.prod(np.sin(spherical_coordinates[1:]))
-        return x
     
     def addative_point_mutation(self, current_genes : np.ndarray[np.ndarray[float]]):
         """
@@ -298,6 +228,7 @@ class FisherGeometricModel() :
             added_gene_index = np.random.choice(range(n))
             added_gene = list_genes[added_gene_index]
             list_genes = np.concatenate((list_genes,[added_gene]))
+            self.duplication_events.append({'time': self.current_time, 'gene': added_gene, 'distance': self.current_pos, 'fixed': False})
             
             # print(f"nr dupl:{nb_dupl}, indices: {added_gene_index}, added genes : {added_genes}, total list : {list_genes}")
         return list_genes, duplication_occurred
@@ -353,57 +284,7 @@ class FisherGeometricModel() :
         d = np.linalg.norm(position) # compute the euclidian distance to to the optimum
         w = np.exp(-self.alpha * d**self.Q) # Tenaillon 2014 (playing on the parameters alpha and Q modify fitness distribution in the phenotypic landscape)
         return w
-    
-    def fitness_effect(self, previous_fitness, new_fitness):
-        """
-        Compute the fitness effect of a change in the phenotype/genotype.
-        It is just the logarithm of the ratio between the fitness of the new position in the space 
-        and the fitness of the position before the modification. (ancestral position).
 
-        ------
-        Parameters :
-            previous_fitness : float
-            fitness of the ancestral phenotype/genotype.
-            new_fitness : float
-            fitness of the new phenotype/genotype.
-
-        ------
-        Return
-            np.log(new_fitness/previous_fitness) : float
-            Fitness effect s of a modification in the phenotype/genotype of an individual (due to 
-            mutation, duplication, deletion)
-
-        """
-
-        s = np.log(new_fitness/previous_fitness)
-        return s
-        # when the new fitness is higher than the ancestral one, the ratio is > 1, so the effect is > 0
-        # return new_fitness/previous_fitness - 1 # Martin 2006 (for s small, not used here)
-        # if > 0, the mutation as improve the fitness, it is beneficial
-    
-    def fixation_probability(self, s: float) -> float:
-        """
-        Compute the fixation probability of a given modification in the genome, 
-        having a fitness effect s.
-        Here we consider a population of infinite size, which means that drift is negligeable 
-        in front of selection and that only beneficial mutation will have the possibility to fix. 
-
-        ------
-        Parameters
-            s,
-                fitness effect of the modification (see function fitness_effect())
-
-        ------
-        Return
-            p,
-                Probability of fixation of a mutation/duplication/deletion. 
-            
-        """
-        if s > 0 : # beneficial mutation
-            p = (1 - np.exp(-2*s)) # Barrett 2006 
-        else : # deleterious mutation
-            p = 0 # deleterious mutation do not fix
-        return p
 
     def extend_data(self, time : int) -> None:
         self.methods = np.concatenate((self.methods, np.full((time,len(self.mutation_functions)), fill_value= False)))
@@ -484,6 +365,8 @@ class FisherGeometricModel() :
                 # print(mutation)
                 self.fixation(mutated_genes)
                 mutation_occured[i] = True
+                if mutation == self.duplication:
+                    self.duplication_events[-1]['fixed'] = True
         
         if any(mutation_occured):
             self.methods[time] = np.array(mutation_occured)
@@ -529,18 +412,6 @@ class FisherGeometricModel() :
         if np.linalg.norm(new_pos) < np.linalg.norm(self.current_pos):
             return True
         else:
-            return False
-        
-        s = self.fitness_effect(self.current_fitness, new_fitness) # the fitness effect of the modification
-        prob = self.fixation_probability(s) # its fixation probality depending on its fitness effect
-
-        if np.random.rand() < prob : # the mutation is fixed
-            # print(f"\nfixation succeded, probability {prob}")
-            return True
-            
-        else : # if the mutation didn't fix
-            # print(f"\nfixation failed ,  probability {prob}")
-            
             return False
 
     def fixation(self,new_genes : np.ndarray[np.ndarray[float]]) -> None:
