@@ -1,7 +1,7 @@
 {
     "display_fixation":1,
-    "n": 100,
-    "initial_distance": 50,
+    "n": 10,
+    "initial_distance": 100,
     "mutation_methods": ["addition","duplication"],
     "sigma_add": 1e-1,
     "duplication_rate": 2e-2,

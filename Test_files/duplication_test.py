@@ -34,30 +34,32 @@ def analytical_probability(r, d_1, n):
 
 
 def plot_probability_heatmap():
-    r_values = np.linspace(0, 2/3, 100)  # Värden för r mellan 0 och 2/3
-    n_values = np.arange(2, 1000)  # Värden för n mellan 2 och 100
+    r_values = np.linspace(0, 2/3, 100)  # Values for r between 0 and 2/3
+    n_values = np.arange(2, 1000)  # Values for n between 2 and 1000
 
-    # Skapa en matris för att lagra sannolikheterna
+    # Create a matrix to store the probabilities
     heatmap_data = np.zeros((len(n_values), len(r_values)))
 
-    # Beräkna sannolikheten för varje kombination av r och n
-    d_1 = 1  # Definiera ett värde för d_1, t.ex. 1 (kan justeras beroende på problem)
+    # Calculate the probability for each combination of r and n
+    d_1 = 1  # Define a value for d_1, e.g., 1 (can be adjusted depending on the problem)
     for i, r in enumerate(r_values):
         for j, n in enumerate(n_values):
             heatmap_data[j, i] = analytical_probability(r, d_1, n)
 
-    # Skapa heatmap
-    fig = plt.figure(figsize=(10, 8))
-    sns.heatmap(heatmap_data, cmap='viridis', cbar_kws={'label': 'Probability'})
+    # Apply logarithmic scale to the heatmap data
+    heatmap_data = np.log(heatmap_data + 1e-20)  # Adding a small value to avoid log(0)
 
+    # Create heatmap
+    fig = plt.figure(figsize=(10, 8))
+    sns.heatmap(heatmap_data, cmap='viridis', cbar_kws={'label': 'Log Probability'})
 
     plt.xticks(ticks=np.arange(0, len(r_values), step=10), labels=np.round(r_values[::10], 2))
     plt.yticks(ticks=np.arange(0, len(n_values), step=50), labels=n_values[::50])
     plt.gca().invert_yaxis()
-    plt.title("Analytical Probability Heatmap")
+    plt.title("Logarithmic Scale Analytical Probability Heatmap")
     plt.xlabel('r/d Values')
     plt.ylabel('n Values')
-    plt.savefig("Figures/duplication_heatmap")
+    plt.savefig("Figures/duplication_heatmap_log")
     return fig
 
 def plot_numerical(n = 10):

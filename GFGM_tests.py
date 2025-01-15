@@ -441,25 +441,57 @@ def test_deletion_probabilities(fgm_args : dict, nb_tests : int = 100, fitness_l
     ax.hist(deletions, color = 'r', ec='k')
     fig.savefig(f"Figures/deletion_histogram_n_{fgm_args['n']}")
 
-def test_effect_of_genome_size(fgm_args : dict, generations_until_reset : int, following_generations : int):
-    generations_until_reset = int(generations_until_reset)
-    following_generations = int(following_generations)
+def test_effect_of_genome_size(fgm_args: dict, reset_points: list[int], total_generations: int):
+    """
+    Test the effect of genome size with multiple resets and visualize them in the same plot.
+    
+    Parameters:
+    - fgm_args: dict, arguments for initializing the FisherGeometricModel
+    - reset_points: list[int], list of generations at which to reset the genome
+    - total_generations: int, number of generations to simulate after each reset
+    
+    Returns:
+    - fig: matplotlib figure, the comparison plot
+    """
+    total_generations = int(total_generations)
+    fgm_args['display_fixation'] = False
+
+    fig, ax = plt.subplots(figsize=(10, 8))
+    ax.set_title("Distance to the Optimum with Multiple Resets")
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Distance to the Optimum")
+    ax.set_yscale('log')
+    # ax.set_xscale("log")
+    ax.grid()
 
     fgm = FisherGeometricModel(**fgm_args)
-    fgm.evolve_successive(generations_until_reset)
-    fgm_2 = copy.deepcopy(fgm)
-    fgm_2.reinitialize()
+    current_generations = 0
+    resets = len(reset_points)
+    ys = np.zeros((resets+1, total_generations+2))
 
-    fgm.evolve_successive(following_generations)
-    fgm_2.evolve_successive(following_generations)
+    for i,reset_point in enumerate(reset_points):
+        reset_point = int(reset_point)
+        fgm.evolve_successive(reset_point - current_generations)
+        current_generations = reset_point
 
-    fgms = [fgm, fgm_2]
-    fig1 = draw_distance_plot(fgms, title = f"Distance to the optimum with n = {fgm_args['n']} and a reset at t={generations_until_reset}")
-    fig1.savefig(f"Figures/reset_t_{generations_until_reset}")
+        fgm_2 = copy.deepcopy(fgm)
+        fgm_2.reinitialize()
 
-    fig2 = draw_gene_size(fgms, figtitle= f"Number and size of genes with n = {fgm_args['n']} and a reset at t={generations_until_reset}")
-    fig2.savefig(f"Figures/gene_size_t_{generations_until_reset}")
+        remaining_generations = total_generations-reset_point
+        fgm_2.evolve_successive(remaining_generations)
 
+ 
+        ys[i] = np.linalg.norm(fgm_2.positions, axis=1)
+
+    fgm.evolve_successive(remaining_generations)
+    x = np.arange(fgm.current_time+1)
+    for i in range(resets):
+        ax.plot(x, ys[i], label=f"Reset at generation {reset_points[i]}")
+    ax.plot(x, np.linalg.norm(fgm.positions, axis=1), label="No Reset")
+    
+    ax.legend()
+    fig.savefig("Figures/multiple_resets_comparison")
+    return fig
 
 def show_simulation_results(fgm : FisherGeometricModel):
     # print(f"Number of genes in time: {fgm.nb_genes}")
@@ -718,6 +750,164 @@ def compare_genome_size_no_duplications(fgm_args: dict, genome_sizes: list[int],
     fig.savefig("Figures/genome_size_no_duplications_comparison")
     return fig
 
+def compare_duplication_attempts(fgm_args: dict, num_runs: int = 100, time_steps: int = 1000, save_file: str = "duplication_attempts_data.pkl"):
+    """
+    Compare the proportion of successful duplication attempts from a number of simulations, grouped by the size of r/d.
+    
+    Parameters:
+    - fgm_args: dict, arguments for initializing the FisherGeometricModel
+    - num_runs: int, number of numerical simulations to run
+    - time_steps: int, number of time steps for the simulation
+    - save_file: str, filename to save/load the simulation data
+    
+    Returns:
+    - fig: matplotlib figure, the comparison plot
+    """
+    n = fgm_args['n']
+    if os.path.exists(save_file):
+        analytical_probs, bin_centers, success_proportions = load_simulation_data(save_file)
+    else:
+        fgm_args['display_fixation'] = False
+        initial_distance = fgm_args['initial_distance']
+
+        r_d_ratios = []
+        success_counts = []
+        attempt_counts = []
+
+        for run in range(num_runs):
+            fgm = FisherGeometricModel(**fgm_args)
+            fgm.evolve_successive(time_steps)
+            for event in fgm.duplication_events:
+                r = np.linalg.norm(event["gene"])
+                d = np.linalg.norm(event["pos"]-event["gene"])
+                r_d_ratio = r / d
+                r_d_ratios.append(r_d_ratio)
+                attempt_counts.append(1)
+                success_counts.append(1 if event['fixed'] else 0)
+            print(f"Run {run + 1}/{num_runs} completed", end="\r")
+
+        r_d_ratios = np.array(r_d_ratios)
+        success_counts = np.array(success_counts)
+        attempt_counts = np.array(attempt_counts)
+        
+        # Group by r/d ratios
+        bins = np.linspace(0, 2/3, 30)
+        bin_indices = np.digitize(r_d_ratios, bins)
+        bin_centers = (bins[:-1] + bins[1:]) / 2
+        success_proportions = np.zeros(len(bins) - 1)
+
+        for i in range(1, len(bins)):
+            bin_mask = bin_indices == i
+            if np.sum(bin_mask) > 0:
+                success_proportions[i - 1] = np.sum(success_counts[bin_mask]) / np.sum(attempt_counts[bin_mask])
+
+        # Analytical probability
+        analytical_probs = np.array([analytical_probability(r, 1, n) for r in np.linspace(0, 2/3, 29)])
+
+        save_simulation_data(save_file, (analytical_probs, bin_centers, success_proportions))
+
+
+    # Plotting the results
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_subplot()
+
+    ax.plot(bin_centers, success_proportions, label="Simulated Proportion of Successful Duplications", color="b")
+    ax.plot(bin_centers, analytical_probs, label="Analytical Probability", color="r")
+
+    ax.set_xlabel("r/d Ratio")
+    ax.set_ylabel("Proportion of Successful Duplications")
+    ax.set_title("Proportion of Successful Duplication Attempts vs Analytical Probability")
+    ax.legend()
+    ax.grid()
+
+    fig.savefig("Figures/duplication_attempts_comparison")
+    return fig
+
+def compare_duplication_heatmap(fgm_args: dict, n_values: list[int], num_runs: int = 100, time_steps: int = 1000, save_file: str = "duplication_heatmap_data.pkl"):
+    """
+    Generate a heatmap showing the proportions of beneficial observed duplications for a range of n values,
+    and compare it with the heatmap of analytical expectations.
+    
+    Parameters:
+    - fgm_args: dict, arguments for initializing the FisherGeometricModel
+    - n_values: list[int], list of different values for the dimension n
+    - num_runs: int, number of numerical simulations to run for each n value
+    - time_steps: int, number of time steps for the simulation
+    - save_file: str, filename to save/load the simulation data
+    
+    Returns:
+    - fig: matplotlib figure, the heatmap plot
+    """
+    if os.path.exists(save_file):
+        r_values, observed_heatmap, analytical_heatmap = load_simulation_data(save_file)
+    else:
+        fgm_args['display_fixation'] = False
+
+        r_values = np.linspace(0, 2/3, 30)
+        observed_heatmap = np.zeros((len(n_values), len(r_values)))
+        analytical_heatmap = np.zeros((len(n_values), len(r_values)))
+
+        for i, n in enumerate(n_values):
+            r_d_ratios = []
+            success_counts = []
+            attempt_counts = []
+
+            for run in range(num_runs):
+                fgm_args['n'] = n
+                fgm = FisherGeometricModel(**fgm_args)
+                fgm.evolve_successive(time_steps)
+                for event in fgm.duplication_events:
+                    r = np.linalg.norm(event["gene"])
+                    d = np.linalg.norm(event["pos"]-event["gene"])
+                    r_d_ratio = r / d
+                    r_d_ratios.append(r_d_ratio)
+                    attempt_counts.append(1)
+                    success_counts.append(1 if event['fixed'] else 0)
+                print(f"Run {run + 1}/{num_runs} for n={n} completed", end="\r")
+
+            r_d_ratios = np.array(r_d_ratios)
+            success_counts = np.array(success_counts)
+            attempt_counts = np.array(attempt_counts)
+
+            # Group by r/d ratios
+            bin_indices = np.digitize(r_d_ratios, r_values)
+            for j in range(1, len(r_values)):
+                bin_mask = bin_indices == j
+                if np.sum(bin_mask) > 0:
+                    observed_heatmap[i, j - 1] = np.sum(success_counts[bin_mask]) / np.sum(attempt_counts[bin_mask])
+                analytical_heatmap[i, j - 1] = analytical_probability(r_values[j - 1], 1, n)
+
+        save_simulation_data(save_file, (r_values, observed_heatmap, analytical_heatmap))
+
+    # Calculate the difference heatmap
+    difference_heatmap = observed_heatmap - analytical_heatmap
+
+    # Plotting the heatmaps
+    fig, axes = plt.subplots(1, 2, figsize=(20, 8))
+
+    sns.heatmap(observed_heatmap, ax=axes[0], cmap='viridis', cbar_kws={'label': 'Observed Proportion'})
+    axes[0].set_xticks(np.arange(len(r_values)) + 0.5)
+    axes[0].set_xticklabels(np.round(r_values, 2), rotation=45)
+    axes[0].set_yticks(np.arange(len(n_values)) + 0.5)
+    axes[0].set_yticklabels(n_values)
+    axes[0].invert_yaxis()
+    axes[0].set_xlabel('r/d Values')
+    axes[0].set_ylabel('n Values')
+    axes[0].set_title('Observed Proportion of Beneficial Duplications')
+
+    sns.heatmap(difference_heatmap, ax=axes[1], cmap='coolwarm', center=0, cbar_kws={'label': 'Difference (Observed - Analytical)'})
+    axes[1].set_xticks(np.arange(len(r_values)) + 0.5)
+    axes[1].set_xticklabels(np.round(r_values, 2), rotation=45)
+    axes[1].set_yticks(np.arange(len(n_values)) + 0.5)
+    axes[1].set_yticklabels(n_values)
+    axes[1].invert_yaxis()
+    axes[1].set_xlabel('r/d Values')
+    axes[1].set_ylabel('n Values')
+    axes[1].set_title('Difference Between Observed and Analytical Proportions')
+
+    fig.savefig("Figures/duplication_heatmap_comparison")
+    return fig
+
 if __name__ == "__main__":
     with open('FisherObject', 'rb') as file:
         fgm :FisherGeometricModel = pickle.load(file)
@@ -732,7 +922,8 @@ if __name__ == "__main__":
     # show_simulation_results(fgm)
 
 
-    # test_effect_of_genome_size(fgm_args,generations_until_reset = 5e2,following_generations = 1e3)
+    # reset_points = [100, 500, 1000]
+    # test_effect_of_genome_size(fgm_args, reset_points, total_generations=2000)
 
     # test_deletion_probabilities(fgm_args)
 
@@ -741,6 +932,11 @@ if __name__ == "__main__":
     # distance_values = [10, 20, 30, 40, 50, 100]
     # compare_analytical_numerical_heatmap(fgm_args, n_values, distance_values, num_runs=100, time_steps=1000)
     # compare_duplication_probability(fgm_args, num_runs=1000, time_steps=1000)
-    genome_sizes = [1, 5, 10, 20]
-    compare_genome_size_no_duplications(fgm_args, genome_sizes, num_runs=100, time_steps=10000)
+    # genome_sizes = [1, 5, 10, 20]
+    # compare_genome_size_no_duplications(fgm_args, genome_sizes, num_runs=100, time_steps=10000)
+    # compare_duplication_attempts(fgm_args, num_runs=1000, time_steps=1000)
+    # n_values = [3, 10, 20, 50, 100, 500,1000]
+    # compare_duplication_heatmap(fgm_args, n_values, num_runs=5000, time_steps=1000)
+
+    test_effect_of_genome_size(fgm_args, reset_points = [100, 500, 1000], total_generations = 2000)
     plt.show()
