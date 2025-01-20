@@ -94,19 +94,24 @@ def test_expectation(n,d,sigmas,tests = 1000):
     ax.legend()
     plt.show()
 
-def analytical_simulation(n,d,sigma,timestop, with_duplication = True, duplication_rate = 0.02, plot = False):
+def analytical_simulation(n,d,sigma,timestop, duplication_rate = 0.02, initial_nb_genes : float = 1, plot = False):
+    
+    with_duplication = (duplication_rate > 0)
     distances = np.zeros(timestop)
     distances[0] = d
-    nb_genes = 1
+    nb_genes = np.full(timestop,initial_nb_genes)
     if with_duplication:
         for t in range(1,timestop):
-            average_gene_size = (d-distances[t-1]) / nb_genes
-            new_genes = nb_genes*duplication_rate*duplication_probability(average_gene_size,distances[t-1]-average_gene_size,n)
-            distances[t] = max(analytical_expectation(n,distances[t-1],sigma*np.sqrt(nb_genes))-average_gene_size*new_genes,0)
-            nb_genes += new_genes
+            average_gene_size = (d-distances[t-1]) / nb_genes[t-1]
+            new_genes = nb_genes[t-1]*duplication_rate*duplication_probability(average_gene_size,distances[t-1]-average_gene_size,n)
+            distances[t] = max(analytical_expectation(n,distances[t-1]-average_gene_size*new_genes,sigma*np.sqrt(nb_genes[t-1])),0)
+            nb_genes[t] = nb_genes[t-1]+new_genes
+            print(f"Analytical simulation at time {t}/{timestop}", end = "\r")
     else:
         for t in range(1,timestop):
-            distances[t] = analytical_expectation(n,distances[t-1],sigma)
+            distances[t] = analytical_expectation(n,distances[t-1],sigma*np.sqrt(initial_nb_genes))
+            print(f"Analytical simulation at time {t}/{timestop}", end = "\r")
+    print(f"Analytical simulation done\t\t", end = "\n")
 
     if plot:
         fig = plt.figure(figsize = (10,4))
@@ -119,7 +124,7 @@ def analytical_simulation(n,d,sigma,timestop, with_duplication = True, duplicati
         ax.set_xscale("log")
         ax.set_title(f"Expected distance to the optimum with starting values n = {n}, d = {d}, sigma = {sigma}")
         fig.savefig("Figures/analytical_distance_to_the_optimum")
-    return distances
+    return distances, nb_genes
 
 if __name__ == "__main__":
     n = 10

@@ -11,12 +11,16 @@ For more detailed information on the use of this code for the study of gene dupl
 No particular installation are recquired to run simulations with this code. 
 The user must just be aware that only a Python version is provided.
 Python's library Numpy and Matplotlib (and multiprocessing for parallel computation) are the only necessary tools to use this project.
+Run the following lines on at a time in the command terminal:
+pip install matplotlib
+pip install numpy
+pip install seaborn
 
 ## Usage
 Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
 
 ## Support
-email author : matthieu.deleglise@insa-lyon.fr
+email author : nilsled@chalmers.se
 
 ## Roadmap
 Possible amelioration of the model could follow this code

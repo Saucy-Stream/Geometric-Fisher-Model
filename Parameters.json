@@ -1,13 +1,10 @@
 {
     "display_fixation":1,
-    "n": 10,
-    "initial_distance": 100,
-    "mutation_methods": ["addition","duplication"],
+    "n": 20,
+    "initial_distance": 50,
+    "mutation_methods": ["addition", "deletion", "duplication"],
     "sigma_add": 1e-1,
     "duplication_rate": 2e-2,
     "deletion_rate": 2e-2,
-    "reset_rate" : 1e-2,
-    "reset_size" : 1e-2,
-    "initial_gene_method": "random",
-    "sigma_mult": 1e-1
+    "initial_gene_method": "random"
 }
