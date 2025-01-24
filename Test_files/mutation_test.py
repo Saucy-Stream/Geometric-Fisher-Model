@@ -94,24 +94,50 @@ def test_expectation(n,d,sigmas,tests = 1000):
     ax.legend()
     plt.show()
 
-def analytical_simulation(n,d,sigma,timestop, duplication_rate = 0.02, initial_nb_genes : float = 1, plot = False):
+def analytical_simulation(n,initial_distance,sigma,timestop, duplication_rate = 0.02, initial_nb_genes : float = 1, plot = False):
+    """
+    Finds the expected distance to the optimum for a given number of generations
+
+    Parameters:
+    n : int
+        The number of genes
+    initial_distance : float
+        The initial distance to the optimum
+    sigma : float
+        The standard deviation of the mutations
+    timestop : int
+        The number of generations to simulate
+    duplication_rate : float
+        The rate of duplication of the genes
+    initial_nb_genes : float
+        The initial number of genes
+    plot : bool
+        Whether to plot the results or not
     
+    Returns:
+    distances : np.array
+        The expected distance to the optimum at each generation
+    nb_genes : np.array
+        The number of genes at each generation
+    """
+
     with_duplication = (duplication_rate > 0)
     distances = np.zeros(timestop)
-    distances[0] = d
-    nb_genes = np.full(timestop,initial_nb_genes)
+    distances[0] = initial_distance
+    nb_genes : np.ndarray[float] = np.full(timestop,initial_nb_genes, dtype=float)
     if with_duplication:
         for t in range(1,timestop):
-            average_gene_size = (d-distances[t-1]) / nb_genes[t-1]
+            distances[t] = max(analytical_expectation(n,distances[t-1],sigma*np.sqrt(nb_genes[t-1])),0)
+            average_gene_size = (initial_distance-distances[t-1]) / nb_genes[t-1]
             new_genes = nb_genes[t-1]*duplication_rate*duplication_probability(average_gene_size,distances[t-1]-average_gene_size,n)
-            distances[t] = max(analytical_expectation(n,distances[t-1]-average_gene_size*new_genes,sigma*np.sqrt(nb_genes[t-1])),0)
+            distances[t] = max(distances[t]-average_gene_size*new_genes,0)
             nb_genes[t] = nb_genes[t-1]+new_genes
-            print(f"Analytical simulation at time {t}/{timestop}", end = "\r")
+            print(f"Analytical simulation for n = {n}, d = {initial_distance} at time {t}/{timestop}", end = "\r")
     else:
         for t in range(1,timestop):
             distances[t] = analytical_expectation(n,distances[t-1],sigma*np.sqrt(initial_nb_genes))
-            print(f"Analytical simulation at time {t}/{timestop}", end = "\r")
-    print(f"Analytical simulation done\t\t", end = "\n")
+            print(f"Analytical simulation for n={n}, d = {initial_distance} at time {t}/{timestop}", end = "\r")
+    print(f"Analytical simulation for n = {n}, d = {initial_distance} until t = {timestop} done", end = "\033[K\n")
 
     if plot:
         fig = plt.figure(figsize = (10,4))

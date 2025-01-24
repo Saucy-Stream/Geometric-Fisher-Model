@@ -1,6 +1,7 @@
 from GFGM_model import FisherGeometricModel
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 import pickle
 import json
 import copy
@@ -65,7 +66,7 @@ def plot_vizualised_path(fgm : FisherGeometricModel) -> None:
 
     ax.scatter(*origin, c = 'k')
     ax.grid()
-    ax.legend(fontsize=14)
+    ax.legend(fontsize=12)
     return fig
 
 def draw_gene_size(fgms : list[FisherGeometricModel]):
@@ -119,8 +120,8 @@ def draw_gene_size(fgms : list[FisherGeometricModel]):
 
         x = np.arange(0, fgm.current_time) # abscisse for the confidence intervals to be plotted
         ax2.fill_between(x, list_lower, list_upper, alpha = .1)
-    ax1.legend(fontsize=14)
-    ax2.legend(fontsize=14)
+    ax1.legend(fontsize=12)
+    ax2.legend(fontsize=12)
     return fig
 
 
@@ -205,7 +206,7 @@ def draw_distance_plot(fgms: list[FisherGeometricModel], with_analytical = False
     ax.grid()
     ax.tick_params(axis='both', which='major', labelsize=12)
 
-    ax.legend(fontsize=14)
+    ax.legend(fontsize=12)
     fig.tight_layout()
     fig.savefig("Figures/distance_to_optimum")
     return fig
@@ -237,7 +238,7 @@ def test_deletion_probabilities(fgm_args : dict, nb_tests : int = 100, distance_
     ax.hist(deletions, color = 'r', ec='k')
     fig.savefig(f"Figures/deletion_histogram_n_{used_args['n']}")
 
-def test_effect_of_genome_size(fgm_args: dict, reset_points: list[int], total_generations: int):
+def compare_runs_with_reset(fgm_args: dict, reset_points: list[int], total_generations: int, nb_runs: int = 100):
     """
     Test the effect of genome size with multiple resets and visualize them in the same plot.
     
@@ -249,45 +250,68 @@ def test_effect_of_genome_size(fgm_args: dict, reset_points: list[int], total_ge
     Returns:
     - fig: matplotlib figure, the comparison plot
     """
-    used_args = fgm_args.copy()
-    total_generations = int(total_generations)
-    used_args['display_fixation'] = False
+    if os.path.exists("test_data/multiple_resets_comparison.pkl"):
+        used_args, all_runs = load_simulation_data("test_data/multiple_resets_comparison.pkl")
+    else:
+        used_args = fgm_args.copy()
+        total_generations = int(total_generations)
+        used_args['display_fixation'] = False
+        used_args['mutation_methods'] = ["addition", "duplication"]
+        used_args['duplication_rate'] = 0.02
+        used_args['initial_distance'] = 100
+        used_args["n"] = 100
 
-    fig, ax = plt.subplots(figsize=(10, 8))
+        resets = len(reset_points)
+        
+        all_runs = np.zeros((nb_runs,len(reset_points)+1,total_generations+2))
+        for run in range(nb_runs):
+            current_generations = 0
+            fgm = FisherGeometricModel(**used_args)
+
+            for i,reset in enumerate(reset_points):
+                reset = int(reset)
+                fgm.evolve_successive(reset - current_generations)
+                current_generations = reset
+
+                fgm_2 = copy.deepcopy(fgm)
+                fgm_2.reinitialize()
+
+                remaining_generations = total_generations-reset
+                fgm_2.evolve_successive(remaining_generations)
+
+                all_runs[run,i] = np.linalg.norm(fgm_2.positions, axis=1)
+            fgm.evolve_successive(remaining_generations)
+            all_runs[run,-1] = np.linalg.norm(fgm.positions, axis=1)
+            print(f"Reset run {run+1}/{nb_runs} completed", end="\r")
+        print("All reset runs completed!")
+        used_args["total_generations"] = total_generations
+        used_args["reset_points"] = reset_points
+        used_args["nb_runs"] = nb_runs
+        save_simulation_data("test_data/multiple_resets_comparison.pkl", (used_args, all_runs))
+    total_generations = used_args["total_generations"]
+    means = np.mean(all_runs, axis=0)
+    percentiles = np.percentile(all_runs,[20,80], axis=0)
+    
+    
+    fig, ax = plt.subplots(figsize=(6, 6))
     ax.set_xlabel("Time", fontsize=14)
     ax.set_ylabel("Distance to the Optimum", fontsize=14)
     ax.set_yscale('log')
     # ax.set_xscale("log")
     ax.grid()
     ax.tick_params(axis='both', which='major', labelsize=12)
+    x = np.arange(total_generations+2)
+    for i in range(len(reset_points)):
+        m = means[i]
+        lower = percentiles[0][i]
+        upper = percentiles[1][i]
+        ax.plot(x, m, label=f"Reset at generation {reset_points[i]}")
+        ax.fill_between(x, lower, upper, alpha=0.3)
+    ax.plot(x, means[-1], label="No Reset")
+    ax.fill_between(x, percentiles[0][-1], percentiles[1][-1], alpha=0.3)
 
-
-    fgm = FisherGeometricModel(**used_args)
-    current_generations = 0
-    resets = len(reset_points)
-    ys = np.zeros((resets+1, total_generations+2))
-
-    for i,reset_point in enumerate(reset_points):
-        reset_point = int(reset_point)
-        fgm.evolve_successive(reset_point - current_generations)
-        current_generations = reset_point
-
-        fgm_2 = copy.deepcopy(fgm)
-        fgm_2.reinitialize()
-
-        remaining_generations = total_generations-reset_point
-        fgm_2.evolve_successive(remaining_generations)
-
- 
-        ys[i] = np.linalg.norm(fgm_2.positions, axis=1)
-
-    fgm.evolve_successive(remaining_generations)
-    x = np.arange(fgm.current_time+1)
-    for i in range(resets):
-        ax.plot(x, ys[i], label=f"Reset at generation {reset_points[i]}")
-    ax.plot(x, np.linalg.norm(fgm.positions, axis=1), label="No Reset")
-    
-    ax.legend(fontsize=14)
+    ax.legend(fontsize=12)
+    print("Used arguments for multiple resets comparison plot:", used_args)
     fig.savefig("Figures/multiple_resets_comparison")
     return fig
 
@@ -320,11 +344,12 @@ def test_analytical_vs_numerical(fgm_args: dict, num_runs: int = 100, time_steps
     - fig: matplotlib figure, the comparison plot
     """
     savefile = "test_data/analytical_solution.pkl"
-    n = used_args['n']
     if os.path.exists(savefile):
         used_args, with_duplication, analytical_distances, analytical_nb_genes, numerical_distances, numerical_nb_genes = load_simulation_data(savefile)
     else:
         used_args = fgm_args.copy()
+        n = used_args['n']
+
         used_args['display_fixation'] = False
         initial_distance = used_args['initial_distance']
         sigma_add = used_args['sigma_add']
@@ -350,65 +375,77 @@ def test_analytical_vs_numerical(fgm_args: dict, num_runs: int = 100, time_steps
         used_args["time_steps"] = time_steps
         save_simulation_data(savefile, (used_args, with_duplication, analytical_distances, analytical_nb_genes, numerical_distances, numerical_nb_genes))
 
+    time_steps = used_args["time_steps"]
     if with_duplication:
         # Plotting the results
         fig = plt.figure(figsize=(10, 8))
-        axs = fig.subplots(1,2)
+        ax1, ax2 = fig.subplots(1,2)
 
         # Plot analytical solution
         x = range(time_steps+2)
         
-
+        percentiles = [10,90]
+        mean = np.mean(numerical_distances, axis=0)
+        lower = np.percentile(numerical_distances, percentiles[0], axis=0)
+        upper = np.percentile(numerical_distances, percentiles[1], axis=0)
         # Plot numerical simulations
-        for run in range(num_runs):
-            axs[0].plot(x, numerical_distances[run], color="r", alpha=0.1)
-        axs[0].plot(x, np.mean(numerical_distances, axis=0), label="Average of Numerical simulations", color="r")
-        axs[0].plot(x, analytical_distances, label="Analytical solution", color="k")
+        ax1.plot(x, mean, label="Average of Numerical simulations", color="r")
+        ax1.fill_between(x, lower, upper, alpha=0.3, color="r", label = f"{percentiles[0]}-{percentiles[1]}% confidence interval")
+        ax1.plot(x, analytical_distances, label="Analytical solution", color="k")
 
-        axs[0].set_xlabel("Time", fontsize=14)
-        axs[0].set_ylabel("Distance to the optimum", fontsize=14)
-        # axs[0].set_yscale("log")
-        # axs[0].set_xscale("log")
-        axs[0].legend(fontsize=14)
-        axs[0].grid()
-        axs[0].tick_params(axis='both', which='major', labelsize=12)
-
-
-        for run in range(num_runs):
-            axs[1].plot(x, numerical_nb_genes[run], color="r", alpha=0.1)
-        axs[1].plot(x, analytical_nb_genes, label="Analytical solution", color="k")
-        axs[1].plot(x, np.mean(numerical_nb_genes, axis=0), label="Average of Numerical simulations", color="r")
-        axs[1].set_xlabel("Time", fontsize=14)
-        axs[1].set_ylabel("Number of genes", fontsize=14)
-        # axs[1].set_xscale("log")
-        axs[1].legend(fontsize=14)
-        axs[1].grid()
-        axs[1].tick_params(axis='both', which='major', labelsize=12)
+        ax1.set_xlabel("Time", fontsize=14)
+        ax1.set_ylabel("Distance to the optimum", fontsize=14)
+        ax1.set_yscale("log")
+        ax1.set_xscale("log")
+        ax1.legend(fontsize=12)
+        ax1.grid()
+        ax1.tick_params(axis='both', which='major', labelsize=12)
 
 
-        axs[0].text(0.93, 0.98, 'a)', transform=axs[0].transAxes, fontsize=16, va='top', bbox=dict(facecolor='0.7', edgecolor='none', pad=3.0))
-        axs[1].text(0.93, 0.98, 'b)', transform=axs[1].transAxes, fontsize=16, va='top', bbox=dict(facecolor='0.7', edgecolor='none', pad=3.0))
+        mean = np.mean(numerical_nb_genes, axis=0)
+        lower = np.percentile(numerical_nb_genes, percentiles[0], axis=0)
+        upper = np.percentile(numerical_nb_genes, percentiles[1], axis=0)
+
+        ax2.plot(x, mean, label="Average of Numerical simulations", color="r")
+        ax2.fill_between(x, lower, upper, alpha=0.3, color="r", label = f"{percentiles[0]}-{percentiles[1]}% confidence interval")
+        ax2.plot(x, analytical_nb_genes, label="Analytical solution", color="k")
+
+        ax2.set_xlabel("Time", fontsize=14)
+        ax2.set_ylabel("Number of genes", fontsize=14)
+        ax2.set_xscale("log")
+        ax2.legend(fontsize=12)
+        ax2.grid()
+        ax2.tick_params(axis='both', which='major', labelsize=12)
+
+
+        ax1.text(0.93, 0.98, 'a)', transform=ax1.transAxes, fontsize=16, va='top', bbox=dict(facecolor='0.7', edgecolor='none', pad=3.0))
+        ax2.text(0.93, 0.98, 'b)', transform=ax2.transAxes, fontsize=16, va='top', bbox=dict(facecolor='0.7', edgecolor='none', pad=3.0))
 
         fig.savefig("Figures/analytical_vs_numerical_comparison_with_duplication")
     else:
+
         # Plotting the results
-        fig = plt.figure(figsize=(10, 8))
+        fig = plt.figure(figsize=(6, 6))
         axs = fig.subplots()
 
         # Plot analytical solution
         x = range(time_steps+2)
 
         # Plot numerical simulations
-        for run in range(num_runs):
-            axs.plot(x, numerical_distances[run], color="r", alpha=0.05)
-        axs.plot(x, np.mean(numerical_distances, axis=0), label="Average of Numerical simulations", color="r")
+        percentiles = [10,90]
+        mean = np.mean(numerical_distances, axis=0)
+        lower = np.percentile(numerical_distances, percentiles[0], axis=0)
+        upper = np.percentile(numerical_distances, percentiles[1], axis=0)
+
+        axs.plot(x, mean, label="Average of Numerical simulations", color="r")
+        axs.fill_between(x, lower, upper, alpha=0.3, color="r", label = f"{percentiles[0]}-{percentiles[1]}% confidence interval")
         axs.plot(x, analytical_distances, label="Analytical solution", color="k")
 
         axs.set_xlabel("Time", fontsize=14)
         axs.set_ylabel("Distance to the optimum", fontsize=14)
         axs.set_yscale("log")
         # axs.set_xscale("log")
-        axs.legend(fontsize=14)
+        axs.legend(fontsize=12)
         axs.grid()
         axs.tick_params(axis='both', which='major', labelsize=12)
 
@@ -434,22 +471,21 @@ def compare_analytical_numerical_heatmap(fgm_args: dict, n_values: list[int], di
     """
     savefile = "test_data/analytical_vs_numerical_heatmap.pkl"
     if os.path.exists(savefile):
-        used_args, heatmap_data = load_simulation_data(savefile)
+        used_args, analytical_data, numerical_data = load_simulation_data(savefile)
     else:
         used_args = fgm_args.copy()
-        heatmap_data = np.zeros((len(n_values), len(distance_values)))
-
+        analytical_data = np.zeros((len(n_values), len(distance_values),time_steps+2))
+        numerical_data = np.zeros((len(n_values), len(distance_values),time_steps+2))
+        used_args['display_fixation'] = False
+        sigma_add = used_args['sigma_add']
+        duplication_rate = used_args.get('duplication_rate', 0.02)
         for i, n in enumerate(n_values):
+            used_args['n'] = n
             for j, initial_distance in enumerate(distance_values):
-                used_args['n'] = n
                 used_args['initial_distance'] = initial_distance
-                used_args['display_fixation'] = False
-                sigma_add = used_args['sigma_add']
-                duplication_rate = used_args.get('duplication_rate', 0.02)
-                with_duplication = "duplication" in used_args['mutation_methods']
 
                 # Analytical solution
-                analytical_distances = analytical_simulation(n, initial_distance, sigma_add, time_steps, with_duplication, duplication_rate)
+                analytical_distances, _ = analytical_simulation(n, initial_distance, sigma_add, time_steps+2, duplication_rate)
 
                 # Numerical simulations
                 numerical_distances = np.zeros((num_runs, time_steps+2))
@@ -463,25 +499,56 @@ def compare_analytical_numerical_heatmap(fgm_args: dict, n_values: list[int], di
                 avg_numerical_distances = np.mean(numerical_distances, axis=0)
 
                 # Compute the integrated square of the difference
-                diff_squared = np.sum((analytical_distances - avg_numerical_distances[:time_steps])**2)
-                normalized_diff = diff_squared / np.sum(avg_numerical_distances[:time_steps]**2)
-                heatmap_data[i, j] = normalized_diff
-                used_args["distance_values"] = distance_values
-                used_args["n_values"] = n_values
-                save_simulation_data(savefile, (used_args,heatmap_data))
+                numerical_data[i, j] = avg_numerical_distances
+                analytical_data[i,j] = analytical_distances
+        used_args["initial_distance"] = distance_values
+        used_args["n"] = n_values
+        used_args["time_steps"] = time_steps
+        save_simulation_data(savefile, (used_args,analytical_data, numerical_data))
+
+    time_steps = used_args["time_steps"]
+
+    heatmap_data = np.zeros((len(n_values), len(distance_values)))
+    normalized_heatmap_data = np.zeros((len(n_values), len(distance_values)))
+    for i in range(len(n_values)):
+        for j in range(len(distance_values)):
+            analytical = analytical_data[i,j]
+            numerical = numerical_data[i,j]
+            heatmap_data[i,j] = np.trapezoid(abs(analytical - numerical)) / time_steps
+            normalized_heatmap_data[i,j] = np.trapezoid(abs((analytical - numerical)/analytical)) / time_steps
 
     # Plotting the heatmap
-    fig = plt.figure(figsize=(10, 8))
-    ax = sns.heatmap(heatmap_data, cmap='viridis', cbar_kws={'label': 'Normalized Square Difference', 'fontsize': 14})
+    fig = plt.figure(figsize=(20, 8))
+    ax1, ax2 = fig.subplots(1,2)
 
-    ax.set_xticks(np.arange(len(distance_values)) + 0.5)
-    ax.set_xticklabels(distance_values)
-    ax.set_yticks(np.arange(len(n_values)) + 0.5)
-    ax.set_yticklabels(n_values)
-    ax.invert_yaxis()
-    ax.set_xlabel('Initial Distance to Optimum', fontsize=14)
-    ax.set_ylabel('Dimension n', fontsize=14)
+    heatmap = sns.heatmap(heatmap_data, ax = ax1, cmap='viridis', cbar=True)
+    cbar = heatmap.collections[0].colorbar
+    cbar.set_label('Difference', fontsize=20)
+    cbar.ax.tick_params(labelsize=16)
+    ax1.set_xticks(np.arange(len(distance_values)) + 0.5)
+    ax1.set_xticklabels(distance_values)
+    ax1.set_yticks(np.arange(len(n_values)) + 0.5)
+    ax1.set_yticklabels(n_values)
+    ax1.invert_yaxis()
+    ax1.set_xlabel('Initial Distance to Optimum', fontsize=20)
+    ax1.set_ylabel('Dimension n', fontsize=20)
+    ax1.text(0.01, 0.99, 'a)', transform=ax1.transAxes, fontsize=20, va='top', bbox=dict(facecolor='0.7', edgecolor='none', pad=3.0))
 
+    
+    heatmap = sns.heatmap(normalized_heatmap_data, ax = ax2, cmap='viridis', cbar=True)
+    cbar = heatmap.collections[0].colorbar
+    cbar.set_label('Normalized Difference', fontsize=20)
+    cbar.ax.tick_params(labelsize=16)
+    ax2.set_xticks(np.arange(len(distance_values)) + 0.5)
+    ax2.set_xticklabels(distance_values)
+    ax2.set_yticks(np.arange(len(n_values)) + 0.5)
+    ax2.set_yticklabels(n_values)
+    ax2.invert_yaxis()
+    ax2.set_xlabel('Initial Distance to Optimum', fontsize=20)
+    ax2.set_ylabel('Dimension n', fontsize=20)
+    ax2.text(0.01, 0.99, 'b)', transform=ax2.transAxes, fontsize=20, va='top', bbox=dict(facecolor='0.7', edgecolor='none', pad=3.0))
+
+    print("Used arguments for analytical v numerical solution heatmap plot:", used_args)
     fig.savefig("Figures/analytical_vs_numerical_heatmap")
     return fig
 
@@ -666,7 +733,7 @@ def compare_genome_size_no_duplications(fgm_args: dict, genome_sizes: list[int],
     ax.set_ylabel("Distance to the optimum", fontsize=14)
     ax.set_yscale("log")
     ax.set_xscale("log")
-    ax.legend(fontsize=14)
+    ax.legend(fontsize=12)
     ax.grid()
     ax.tick_params(axis='both', which='major', labelsize=12)
 
@@ -741,7 +808,7 @@ def compare_duplication_attempts(fgm_args: dict, num_runs: int = 100, time_steps
 
     ax.set_xlabel("r/d Ratio", fontsize=14)
     ax.set_ylabel("Proportion of Successful Duplications", fontsize=14)
-    ax.legend(fontsize=14)
+    ax.legend(fontsize=12)
     ax.grid()
     ax.tick_params(axis='both', which='major', labelsize=12)
 
@@ -861,6 +928,163 @@ def compare_duplication_heatmap(fgm_args: dict, n_values: list[int], num_runs: i
     print(f"Model arguments for duplication heatmap plot: {used_args}")
     return fig
 
+def test_mean_simulation_results(fgm_args: dict, n_values: list[int], mutation_methods: list[list[str]], num_runs: int = 100, time_steps: int = 1000):
+    """
+    Test the mean simulation results for the GFGM with different mutation methods and values of n.
+    
+    Parameters:
+    ----
+    fgm_args: dict, 
+        arguments for initializing the FisherGeometricModel
+    n_values: list[int], 
+        list of different values for the dimension n
+    mutation_methods: list[list[str]], 
+        list of different mutation methods to test
+    num_runs: int, 
+        number of numerical simulations to run for each combination of n and mutation methods
+    time_steps: int, 
+        number of time steps for the simulation
+    
+    Returns:
+    ----
+    fig: matplotlib figure, 
+        the comparison plot
+    """
+
+    if os.path.exists("test_data/mean_simulation_results.pkl"):
+        used_args, all_runs = load_simulation_data("test_data/mean_simulation_results.pkl")
+    else:
+        used_args = fgm_args.copy()
+        used_args["display_fixation"] = False
+
+
+        all_runs = np.zeros((len(n_values), len(mutation_methods), num_runs, time_steps+2))
+        for i, n in enumerate(n_values):
+            for j, methods in enumerate(mutation_methods):
+                used_args['n'] = n
+                used_args['mutation_methods'] = methods
+
+                for run in range(num_runs):
+                    fgm = FisherGeometricModel(**used_args)
+                    fgm.evolve_successive(time_steps)
+                    all_runs[i, j, run] = np.linalg.norm(fgm.positions, axis=1)
+                    print(f"Run {run + 1}/{num_runs} for n={n}, methods={methods} completed", end="\033[K\r")
+
+        
+        used_args["time_steps"] = time_steps
+        used_args["n_values"] = n_values
+        used_args["mutation_methods"] = mutation_methods
+        save_simulation_data("test_data/mean_simulation_results.pkl", (used_args, all_runs))
+    
+    time_steps = used_args["time_steps"]
+    x = np.arange(time_steps+2)
+
+    fig, ax = plt.subplots(figsize=(6, 6))
+    linetypes = ['-', '--', '-.']
+    colors = ['b', 'r', 'g']
+
+    percentiles = [10, 90]
+    for i, n in enumerate(used_args["n_values"]):
+        for j, methods in enumerate(used_args["mutation_methods"]):
+            lower = np.percentile(all_runs[i, j], percentiles[0], axis=0)
+            upper = np.percentile(all_runs[i, j], percentiles[1], axis=0)
+            mean = np.mean(all_runs[i, j], axis=0)
+            ax.plot(x, mean, label=f"Mean Distance (n={n}, methods={methods})", linestyle=linetypes[i], c = colors[j])
+            ax.fill_between(x, lower, upper, alpha=0.1, color = colors[j])
+
+    
+    color_handles = [Line2D([0], [0], color=color, lw=2) for color in colors]
+    line_handles = [Line2D([0], [0], color='black', lw=2, linestyle=line) for line in linetypes]
+
+    color_labels = ['Only Point', 'Point and Duplications', 'Point, Duplications and Deletions']
+
+    line_labels = used_args["n_values"]
+
+    log = True
+    if log:
+        location = 'upper right'
+        anchor1 = (1,1)
+        anchor2 = (1, 0.8)
+        ax.set_yscale('log')
+        # ax.set_xscale("log")
+    else:
+        location = 'lower left'
+        anchor1 = (0,0)
+        anchor2 = (0, 0.2)    
+    
+    legend1 = ax.legend(color_handles, color_labels, title="Mutation Type", loc=location, bbox_to_anchor=anchor1, fontsize=10)
+    legend2 = ax.legend(line_handles, line_labels, title="Dimension", loc=location, bbox_to_anchor=anchor2, fontsize = 10)
+
+    ax.add_artist(legend1) # Add the customed legend
+
+
+    ax.set_xlabel("Time", fontsize=12)
+    ax.set_ylabel("Distance to the Optimum", fontsize=12)
+    
+    ax.grid()
+    ax.tick_params(axis='both', which='major', labelsize=10)
+
+    fig.savefig("Figures/mean_simulation_results")
+    return fig
+
+def find_fixed_mutations(fgm_args: dict, nb_runs: int = 100, time_steps: int = 1000):
+    """
+    Compare the average number of fixed duplications and deletions from a number of simulations.
+    
+    Parameters:
+    - fgm_args: dict, arguments for initializing the FisherGeometricModel
+    - num_runs: int, number of numerical simulations to run
+    - time_steps: int, number of time steps for the simulation
+    
+    Returns:
+    - fig: matplotlib figure, the overlapping histograms plot
+    """
+    savefile = "test_data/fixed_mutations.pkl"
+    if os.path.exists(savefile):
+        used_args, points, duplications, deletions = load_simulation_data(savefile)
+    else:
+        used_args = fgm_args.copy()
+        used_args['display_fixation'] = False
+        used_args['mutation_methods'] = ['addition', 'duplication', 'deletion']
+
+        points = np.array([])
+        duplications = np.array([])
+        deletions = np.array([])
+        
+        for run in range(nb_runs):
+            fgm = FisherGeometricModel(**used_args)
+            fgm.evolve_successive(time_steps)
+            
+            points = np.concatenate((points, [i for i, method in enumerate(fgm.methods) if method[0]])) 
+            duplications = np.concatenate((duplications, [i for i, method in enumerate(fgm.methods) if method[1]]))
+            deletions = np.concatenate((deletions, [i for i, method in enumerate(fgm.methods) if method[2]]))
+            print(f"Fixation event run {run + 1}/{nb_runs} completed", end="\r")
+        
+        used_args["nb_runs"] = nb_runs
+        used_args["time_steps"] = time_steps
+        save_simulation_data(savefile, (used_args, points, duplications, deletions))
+
+    # Plotting the histograms
+    time_steps = used_args["time_steps"]
+    nb_runs = used_args["nb_runs"]
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_subplot()
+
+    bins = np.arange(time_steps+2, step=50)
+    ax.hist(duplications, bins = bins, alpha=0.5, label="Fixed Duplications", color="b")
+    ax.hist(deletions, bins = bins, alpha=0.5, label="Fixed Deletions", color="r")
+    # ax.hist(points, alpha=0.5, label="Fixed Point", color="g")
+
+    ax.set_xlabel("Time", fontsize=14)
+    ax.set_ylabel("Frequency", fontsize=14)
+    ax.legend(fontsize=12)
+    ax.grid()
+    ax.tick_params(axis='both', which='major', labelsize=12)
+
+    print(f"Model arguments for fixed mutations plot: {used_args}")
+    fig.savefig("Figures/fixed_mutation_events")
+    return fig
+
 if __name__ == "__main__":
     #To create new data for the tests, remove the relevant test data files in test_data folder
 
@@ -870,26 +1094,36 @@ if __name__ == "__main__":
     with open("Parameters.json", 'rb') as file:
         fgm_args : dict = json.load(file)
     # test_fixation_time(fgm_args, ns = range(2,103,5), nb_tests = 10, distance_limit = 1)
-    tested_methods = [["addition"],
-                      ["addition","duplication"],
-                      ["addition","duplication", "deletion"]]
     # show_simulation_results(fgm)
 
 
-    # reset_points = [100, 500, 1000]
-    # test_effect_of_genome_size(fgm_args, reset_points, total_generations=2000)
+    # reset_points = [100, 500, 2000]
+    # compare_runs_with_reset(fgm_args, reset_points, total_generations=4000, nb_runs=100)
 
     # test_deletion_probabilities(fgm_args)
 
-    # test_analytical_vs_numerical(fgm_args, num_runs=100, time_steps=10000)
-    # n_values = [3,10, 20, 50, 100, 500]
-    # distance_values = [10, 20, 30, 40, 50, 100]
-    # compare_analytical_numerical_heatmap(fgm_args, n_values, distance_values, num_runs=100, time_steps=1000)
+    test_analytical_vs_numerical(fgm_args, num_runs=100, time_steps=10000)
+    
+    # n_values = [3,10, 20, 50, 100]
+    # distance_values = [10, 20, 50, 100]
+    # compare_analytical_numerical_heatmap(fgm_args, n_values, distance_values, num_runs=100, time_steps=10000)
+    
     # show_duplication_events(fgm_args, num_runs=1000, time_steps=1000)
-    genome_sizes = [1, 5, 10, 20]
-    compare_genome_size_no_duplications(fgm_args, genome_sizes, num_runs=100, time_steps=10000)
-    compare_duplication_attempts(fgm_args, num_runs=1000, time_steps=1000)
-    show_deletion_events(fgm_args, num_runs=100, time_steps=10000)
-    n_values = [3, 10, 20, 50, 100]
-    compare_duplication_heatmap(fgm_args, n_values, num_runs=500, generations=10000)
+    
+    # genome_sizes = [1, 5, 10, 20]
+    # compare_genome_size_no_duplications(fgm_args, genome_sizes, num_runs=100, time_steps=10000)
+    
+    # compare_duplication_attempts(fgm_args, num_runs=1000, time_steps=1000)
+    
+    # show_deletion_events(fgm_args, num_runs=100, time_steps=10000)
+    
+    # n_values = [3, 10, 20, 50, 100]
+    # compare_duplication_heatmap(fgm_args, n_values, num_runs=500, generations=10000)
+
+    # n_values = [10, 50, 100]
+    # mutation_methods = [["addition"], ["addition", "duplication"], ["addition", "duplication", "deletion"]]
+    # test_mean_simulation_results(fgm_args, n_values, mutation_methods, num_runs=100, time_steps=10000)
+
+    find_fixed_mutations(fgm_args, nb_runs=100, time_steps=1000)
+
     plt.show()

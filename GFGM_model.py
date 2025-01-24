@@ -73,7 +73,7 @@ class FisherGeometricModel() :
 
         self.positions : np.ndarray[np.ndarray[float]] = [self.init_pos, self.current_pos] # memorize the to first position, which are the initial phenotype of the individual and its phenotype after addition of the first gene
         self.distances : np.ndarray[float] = [self.distance_to_optimum(self.init_pos), self.current_distance] # distance values of the phenotype at each iteration
-        self.methods = np.array([[False]*len(mutation_methods),[False]*len(mutation_methods)]) # method use to modificate the genotype at each iteration
+        self.methods = np.array((np.full(len(mutation_methods),False),np.full(len(mutation_methods),False))) # method use to modificate the genotype at each iteration
         self.nb_genes = [0,1] # gene count at each generation
         self.mean_size = np.array([0,np.linalg.norm(self.genes[0])]) # mean size of the genes at each iteration
         self.std_size = np.array([0,0])
@@ -414,7 +414,7 @@ if __name__ == "__main__":
     ##uncomment top or bottom two to run the simulation
     # distance_limit = 0.1
     # fgm.evolve_until_distance(distance_limit)
-    # n_generations = 1*10**4
-    # fgm.evolve_successive(n_generations)
-    with open('FisherObject', 'wb') as output:
+    n_generations = 1*10**4
+    fgm.evolve_successive(n_generations)
+    with open('test_data/FisherObject', 'wb') as output:
         pickle.dump(fgm, output, pickle.HIGHEST_PROTOCOL)
