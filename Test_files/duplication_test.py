@@ -35,7 +35,7 @@ def analytical_probability(r, d_1, n):
 
 def plot_probability_heatmap():
     r_values = np.linspace(0, 2/3, 100)  # Values for r between 0 and 2/3
-    n_values = np.arange(2, 1000)  # Values for n between 2 and 1000
+    n_values = np.arange(2, 101)  # Values for n between 2 and 1000
 
     # Create a matrix to store the probabilities
     heatmap_data = np.zeros((len(n_values), len(r_values)))
@@ -47,19 +47,25 @@ def plot_probability_heatmap():
             heatmap_data[j, i] = analytical_probability(r, d_1, n)
 
     # Apply logarithmic scale to the heatmap data
-    heatmap_data = np.log(heatmap_data + 1e-20)  # Adding a small value to avoid log(0)
+    heatmap_data = heatmap_data  # Adding a small value to avoid log(0)
 
     # Create heatmap
-    fig = plt.figure(figsize=(10, 8))
-    sns.heatmap(heatmap_data, cmap='viridis', cbar_kws={'label': 'Log Probability'})
+    fig = plt.figure(figsize=(8, 6))
+    ax = fig.add_subplot()
+    heatmap = sns.heatmap(heatmap_data, cmap='viridis', cbar = True)
+    cbar = heatmap.collections[0].colorbar
+    cbar.set_label('Probability', fontsize=20)
 
-    plt.xticks(ticks=np.arange(0, len(r_values), step=10), labels=np.round(r_values[::10], 2))
-    plt.yticks(ticks=np.arange(0, len(n_values), step=50), labels=n_values[::50])
-    plt.gca().invert_yaxis()
-    plt.title("Logarithmic Scale Analytical Probability Heatmap")
-    plt.xlabel('r/d Values')
-    plt.ylabel('n Values')
-    plt.savefig("Figures/duplication_heatmap_log")
+    ax.invert_yaxis()
+    cbar.ax.tick_params(labelsize=16)
+
+    ax.set_xticks(ticks=np.arange(0, len(r_values), step=10), labels=np.round(r_values[::10], 2), fontsize = 16, rotation = 45)
+    ax.set_yticks(ticks=np.arange(0, len(n_values), step=10), labels=n_values[::10], fontsize = 16, rotation = 0)
+    ax.set_xlabel('r/d Values', fontsize = 20)
+    ax.set_ylabel('n Values', fontsize = 20)
+
+    fig.tight_layout()
+    plt.savefig("Figures/duplication_heatmap")
     return fig
 
 def plot_numerical(n = 10):

@@ -1,20 +1,11 @@
 '''
-Genotypic Fisher Geometric Model of Adaptation, 
-Iterative version.
+Genotypic Fisher Geometric Model of Adaptation.
 '''
 
-##########################  
-#### Import Libraries ####
-##########################
 
 import numpy as np
 import pickle
 import json
-
-
-##############################
-#### Functions definition ####
-##############################
 
 class FisherGeometricModel() :
     def __init__(self, 
@@ -22,7 +13,8 @@ class FisherGeometricModel() :
                  mutation_methods : list[str] = ["addition", "duplication", "deletion"], 
                  sigma_add: float = 1, duplication_rate: float = 0.01, 
                  deletion_rate: float = 0.01, initial_gene_method: str = "random", 
-                 display_fixation : bool = False) :
+                 display_fixation : bool = False,
+                 save_unfixed_mutations : bool = False):
         """
         Initialized the main parameters and variables used in our modified FGM.
         
@@ -40,11 +32,12 @@ class FisherGeometricModel() :
             Rate of deletion in nb/gene/generation 
         initial_gene_method
             Method of choosing the initial gene
-        
-        Return
-        ------ 
-            None
-            (memorize paramters and variables for later use in other methods)  
+        mutation_methods
+            List of mutation methods to be used
+        display_fixation
+            If True, display the fixation of the genome
+        save_unfixed_mutations
+            If True, save the unfixed mutations in the mutation_events dictionary (memory intensive for large simulations)
         """
         self.dimension : int = n
         self.optimum : np.ndarray[float] = np.zeros(n) #define the origin as the fitness optimum
@@ -54,7 +47,7 @@ class FisherGeometricModel() :
         self.genes : np.ndarray[np.ndarray[float]]= np.array([self.create_fixed_first_gene(initial_gene_method)]) # chose the direction/size of the first gene 
 
         self.current_pos = self.init_pos + np.sum(self.genes, axis = 0) # the real phenotypic position of the individual is computed by adding the genes vectors to the initial position
-        self.current_distance = self.distance_to_optimum(self.current_pos) # Compute the distance to the optimum of the actual phenotype before any mutation happen
+        self.current_distance = np.linalg.norm(self.current_pos) # Compute the distance to the optimum of the actual phenotype before any mutation happen
 
         self.duplication_rate : float = duplication_rate 
         self.deletion_rate : float = deletion_rate
@@ -71,29 +64,27 @@ class FisherGeometricModel() :
                 raise Warning(f"Unknown mutation method \"{method}\"")
 
 
-        self.positions : np.ndarray[np.ndarray[float]] = [self.init_pos, self.current_pos] # memorize the to first position, which are the initial phenotype of the individual and its phenotype after addition of the first gene
-        self.distances : np.ndarray[float] = [self.distance_to_optimum(self.init_pos), self.current_distance] # distance values of the phenotype at each iteration
-        self.methods = np.array((np.full(len(mutation_methods),False),np.full(len(mutation_methods),False))) # method use to modificate the genotype at each iteration
-        self.nb_genes = [0,1] # gene count at each generation
-        self.mean_size = np.array([0,np.linalg.norm(self.genes[0])]) # mean size of the genes at each iteration
-        self.std_size = np.array([0,0])
-        self.duplication_events : list[dict]= []
-        self.deletion_events : list[dict]= []
-
+        self.positions : np.ndarray[np.ndarray[float]] = [self.init_pos, self.current_pos]
+        self.mutation_events : dict[list[dict]]= {method : [] for method in mutation_methods}
+        self.mutation_methods = mutation_methods
+        self.total_genome_range = [0,np.linalg.norm(self.genes[0])] # total genome range is the sum of the norm of all the genes in the genome
         self.current_time = 1
-        initial_signs = self.init_pos*self.genes[0]
-        self.initial_beneficial_directions = np.sum([1 for i in range(n) if initial_signs[i] < 0])
-        self.display_fixation = display_fixation
 
-        self.args = {'n': n, 'initial_distance': initial_distance, 'mutation_methods': mutation_methods, 'duplication_rate': duplication_rate, 'deletion_rate': deletion_rate, 'initial_gene_method': initial_gene_method, 'sigma_add' : sigma_add, 'display_fixation':display_fixation}
+        initial_signs = self.init_pos*self.genes[0]
+        self.initial_beneficial_directions = np.sum([1 for direction in initial_signs if direction < 0])
+
+        self.display_fixation = display_fixation
+        self.save_unfixed_mutations = save_unfixed_mutations
+        self.nb_genes = None # See get_nb_genes method
+
+        self.args = {'n': n, 'initial_distance': initial_distance, 'mutation_methods': mutation_methods, 'duplication_rate': duplication_rate, 'deletion_rate': deletion_rate, 'initial_gene_method': initial_gene_method, 'sigma_add' : sigma_add, 'display_fixation':display_fixation, 'save_unfixed_mutations': save_unfixed_mutations, 'initial_beneficial_directions': self.initial_beneficial_directions}
     
     def get_args(self):
-        return self.args.copy()
+        return self.args
 
     def create_initial_starting_position(self, distance : float) -> np.ndarray[float]:
-        initial_position = np.random.normal(0, 1, self.dimension)
-        initial_position /= np.linalg.norm(initial_position)
-        initial_position *= distance
+        initial_position = np.zeros(self.dimension)
+        initial_position[0] = distance
         return initial_position
 
     def create_fixed_first_gene(self, method: str):
@@ -129,9 +120,7 @@ class FisherGeometricModel() :
             
         
         elif method == "parallel" : 
-            gene = -self.init_pos / np.linalg.norm(self.init_pos) * np.random.normal(0,self.sigma_add) # gene on the axe to the optimum             
-            if np.linalg.norm(self.init_pos) < np.linalg.norm(self.init_pos + gene):
-                gene = -gene
+            gene = -self.init_pos / np.linalg.norm(self.init_pos) * abs(np.random.normal(0,self.sigma_add)) # gene on the axe to the optimum             
         return gene
 
     
@@ -145,25 +134,23 @@ class FisherGeometricModel() :
         ------
         current_genes : np.ndarray[np.ndarray[float]]
             List of genes to be duplicated
-        The useful parameters here are dimension, sigma_add
-
-        Return :
+        
+        Return
         ------ 
         list_genes : np.ndarray[np.ndarray[float]]
             List of 1-dimensional numpy array of size n (dimension of the phenotypic space) representing the genes
             after mutation.
         mut : boolean
-            Always put at true in this version because there is 1 mutation per generation (iteration)
-
+            Always put at true in this version because all genes are always mutated in each generation
         """
         new_genes = current_genes.copy()
         n = len(new_genes)
-        m = np.random.normal(0, self.sigma_add, size=(n, self.dimension)) # draw the mutation from a normal distribution of variance n*sigma_add**2 (variance of a sum of mutation)
+        m = np.random.normal(0, self.sigma_add, size=(n, self.dimension))
         
-        new_genes = np.array([new_genes[i] + m[i] for i in range(n)]) # modify every genes in the list by adding the corresponding mutation. All genes do not mutate the same way
-        # print(f"1st gene: {self.genes[0]}, mutation: {m[0]}")
-        mut = True
-        return new_genes, mut
+        new_genes = np.array([new_genes[i] + m[i] for i in range(n)])
+        self.mutation_events['addition'].append({'time': self.current_time, 'mutation': m, 'fixed': False})
+        
+        return new_genes, True
    
     def duplication(self, current_genes : np.ndarray[np.ndarray[float]]):
         """
@@ -192,9 +179,7 @@ class FisherGeometricModel() :
             added_gene_index = np.random.choice(range(n))
             added_gene = list_genes[added_gene_index]
             list_genes = np.concatenate((list_genes,[added_gene]))
-            self.duplication_events.append({'time': self.current_time, 'gene': added_gene, 'pos': self.current_pos, 'fixed': False})
-            
-            # print(f"nr dupl:{nb_dupl}, indices: {added_gene_index}, added genes : {added_genes}, total list : {list_genes}")
+            self.mutation_events['duplication'].append({'time': self.current_time, 'gene': added_gene, 'index' : added_gene_index, 'pos': self.current_pos, 'fixed': False})    
         return list_genes, duplication_occurred
     
     def deletion(self, current_genes : np.ndarray[np.ndarray[float]]):
@@ -222,52 +207,49 @@ class FisherGeometricModel() :
 
         if deletion_occurred:
             removed_gene = np.random.choice(range(n))
-            self.deletion_events.append({'time': self.current_time, 'gene': list_genes[removed_gene], 'pos': self.current_pos, 'fixed': False})
+            self.mutation_events["deletion"].append({'time': self.current_time, 'gene': list_genes[removed_gene], 'index': removed_gene, 'pos': self.current_pos, 'fixed': False})
             list_genes = np.delete(list_genes,removed_gene,0)
 
         return list_genes, deletion_occurred
 
-    def distance_to_optimum(self, position) -> float: # 4sec
-        """
-        Compute the distance to the optimum of a point, depending on its position in the phenotypic space.
+    def get_nb_genes(self):
+        if self.nb_genes != None and len(self.nb_genes) == self.current_time:
+            return self.nb_genes
+        elif self.mutation_methods == ["addition"]:
+            self.nb_genes = np.ones(self.current_time)
+            return self.nb_genes            
+        else: 
+            events = np.zeros(self.current_time)
+            events[0] = 1
+            
+            duplication_index = [event["time"] for event in self.mutation_events["duplication"] if event['fixed']]
+            events[duplication_index] = 1
+            
+            if "deletion" in self.mutation_events:
+                deletion_index = [event["time"] for event in self.mutation_events["deletion"] if event['fixed']]    
+                events[deletion_index] -= 1
 
-        ------
-        Parameters :
-            position : np.ndarray
-            1-dimensional numpy array of size n (dimension of the space) corresponding to the position of a point.
-            It is the representation of the phenotype of the individual.
+            self.nb_genes = np.cumsum(events)
 
-        ------
-        Return
-            d : float
-            distance value of this particular phenotype. 
-
-        """
-        d = np.linalg.norm(position) # compute the euclidian distance to to the optimum
-        return d
-
-
+            return self.nb_genes
+    
     def extend_data(self, time : int) -> None:
-        self.methods = np.concatenate((self.methods, np.full((time,len(self.mutation_functions)), fill_value= False)))
         self.positions = np.concatenate((self.positions, np.zeros(shape = (time,self.dimension))))
-        self.mean_size = np.concatenate((self.mean_size, np.zeros(shape = time)))
-        self.std_size = np.concatenate((self.std_size, np.zeros(shape = time)))
-        self.distances = np.concatenate((self.distances, np.zeros(shape = time)))
-        self.nb_genes = np.concatenate((self.nb_genes, np.zeros(shape = time)))
+        self.total_genome_range = np.concatenate((self.total_genome_range, np.zeros(shape = time)))
         return
 
     def evolve_until_distance(self, distance_limit: float) -> None:
         if distance_limit <= 0:
             return
         while self.current_distance > distance_limit:
-            if self.current_time >= len(self.methods)-1:
+            if self.current_time >= len(self.positions)-1:
                 self.extend_data(self.current_time)
             self.simulation_step()
 
             
         return
 
-    def evolve_successive(self, time_step : int) : # 20 sec
+    def evolve_successive(self, time_step : int):
         """
         Main method that simulate the evolution for a certain time. 
         At each iteration, only make one kind of change in the genome (duplication, deletion, mutation), 
@@ -291,12 +273,9 @@ class FisherGeometricModel() :
             distance effects of the modification of the genome at each iteration
             methods : list
             If there as been a modification of the genome, memorize by which mechanism it has been changed (dupl and/or del and/or mut)
-            nb_genes : list
-            Evolution of the number of gene at each iteration
         
         """
 
-        #Add extra space to the different vectors so they can fit new simulation data
         time_step = int(time_step)
         self.extend_data(time_step)
 
@@ -310,33 +289,24 @@ class FisherGeometricModel() :
             print(f"Generation: {time}", end = "\r")
 
         mutated_genes = self.genes
-        mutation_occured = np.full(len(self.mutation_functions), fill_value= False)
+        any_mutation_fixed = False
         for i, mutation in enumerate(self.mutation_functions):
-            mutated_genes, mut = mutation(self.genes)
-            if  mut and self.fixation_check(mutated_genes):
+            mutated_genes, mutation_happened = mutation(self.genes)
+            if  mutation_happened and self.fixation_check(mutated_genes):
                 # print(mutation)
                 self.fixation(mutated_genes)
-                mutation_occured[i] = True
-                if mutation == self.duplication:
-                    self.duplication_events[-1]['fixed'] = True
-                elif mutation == self.deletion:
-                    self.deletion_events[-1]['fixed'] = True
+                any_mutation_fixed = True
+                self.mutation_events[self.mutation_methods[i]][-1]['fixed'] = True
+            elif mutation_happened and not self.save_unfixed_mutations:
+                self.mutation_events[self.mutation_methods[i]].pop(-1)
+
         
-        if any(mutation_occured):
-            self.methods[time] = np.array(mutation_occured)
-            self.distances[time] = self.current_distance
-            self.nb_genes[time] = len(self.genes)
-            self.positions[time] = (self.current_pos)
-            sizes = np.linalg.norm(self.genes, axis = 1)
-            self.mean_size[time] = np.mean(sizes)
-            self.std_size[time] = np.std(sizes)
+        if any_mutation_fixed:
+            self.total_genome_range[time] = np.sum(np.linalg.norm(self.genes, axis = 1))
+            self.positions[time] = self.current_pos
         else:
-            self.methods[time] = np.array(np.full(len(self.mutation_functions),False))
-            self.distances[time] = self.distances[time - 1]
-            self.nb_genes[time] = self.nb_genes[time - 1]
+            self.total_genome_range[time] = self.total_genome_range[time - 1]
             self.positions[time] = self.positions[time - 1]
-            self.mean_size[time] = self.mean_size[time - 1]
-            self.std_size[time] = self.std_size[time- 1 ]
         
         
         return
@@ -361,8 +331,7 @@ class FisherGeometricModel() :
         new_pos = self.init_pos + np.sum(new_genes, axis = 0)
 
         
-        # new_distance  = self.distance_to_optimum(new_pos) # its new distance
-        if np.linalg.norm(new_pos) < np.linalg.norm(self.current_pos):
+        if np.linalg.norm(new_pos) < self.current_distance:
             return True
         else:
             return False
@@ -383,7 +352,7 @@ class FisherGeometricModel() :
         """
         self.genes = new_genes
         self.current_pos = self.init_pos + np.sum(new_genes, axis = 0) 
-        self.current_distance = self.distance_to_optimum(self.current_pos)
+        self.current_distance = np.linalg.norm(self.current_pos)
         
         if self.display_fixation:
             print(f'\nNew genome fixated with distance {self.current_distance}, nr of genes: {len(self.genes)}')
@@ -395,14 +364,7 @@ class FisherGeometricModel() :
         self.init_pos = self.current_pos-self.genes[0]
         
         time = self.current_time
-        self.nb_genes[time] = 1
-        self.methods[time] = [False]*len(self.mutation_functions)
-        self.distances[time] = self.current_distance
-        self.nb_genes[time] = len(self.genes)
         self.positions[time] = (self.current_pos)
-        sizes = np.linalg.norm(self.genes, axis = 1)
-        self.mean_size[time] = np.mean(sizes)
-        self.std_size[time] = np.std(sizes)
 
 if __name__ == "__main__":
     #Save a FisherGeometricObjectModel with parameters from Parameters.json to the file FisherObject.pkl

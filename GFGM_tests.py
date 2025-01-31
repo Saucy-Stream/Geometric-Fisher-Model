@@ -69,105 +69,6 @@ def plot_vizualised_path(fgm : FisherGeometricModel) -> None:
     ax.legend(fontsize=12)
     return fig
 
-def draw_gene_size(fgms : list[FisherGeometricModel]):
-    """
-    Plot the evolution of the number & size of genes (due to duplication and deletion) 
-    with respect to time.
-    
-    Parameters
-    ------
-    nb_genes : list
-        List of the number of genes in the genome of the individual at each mutational event (3 per time step)
-    mean_size : list
-        List of the mean size of genes in the genome of the individual at each iteration
-    std_size : list
-        List of the standard deviation of the size of genes in the genome of the individual at each iteration
-    
-    Return
-    ------
-        None
-        (show the graph in another window)
-        
-    """
-    fig = plt.figure(figsize= (10,4))
-
-    ax1 = plt.subplot(1, 2, 1)
-    ax1.set_xlabel('Time',fontsize=14)
-    ax1.set_ylabel('Genes', fontsize=14)
-    ax1.set_xscale("log")
-    ax1.grid()
-    ax1.tick_params(axis='both', which='major', labelsize=12)
-
-    ax1.text(0.02, 0.98, 'a)', transform=ax1.transAxes, fontsize=16, va='top', bbox=dict(facecolor='0.7', edgecolor='none', pad=3.0))
-
-    ax2 = plt.subplot(1, 2, 2)
-
-    ax2.set_xlabel('Time', fontsize=14)
-    ax2.set_ylabel('Mean size', fontsize=14)
-    ax2.set_xscale("log")
-    ax2.grid()
-    ax2.tick_params(axis='both', which='major', labelsize=12)
-
-    ax2.text(0.02, 0.98, 'b)', transform=ax2.transAxes, fontsize=16, va='top', bbox=dict(facecolor='0.7', edgecolor='none', pad=3.0))
-    
-    for i,fgm in enumerate(fgms):
-        ax1.plot(fgm.nb_genes, label = f"Run {i+1}")
-        ax2.plot(fgm.mean_size, label = f"Run {i+1}")
-        ci = np.zeros(fgm.current_time)
-        ci[1:] = [1.96*fgm.std_size[k]/np.sqrt(fgm.nb_genes[k]) for k in range(1,fgm.current_time)]
-        list_lower = [fgm.mean_size[i] - ci[i] for i in range(fgm.current_time)]
-        list_upper = [fgm.mean_size[i] + ci[i] for i in range(fgm.current_time)]
-
-        x = np.arange(0, fgm.current_time) # abscisse for the confidence intervals to be plotted
-        ax2.fill_between(x, list_lower, list_upper, alpha = .1)
-    ax1.legend(fontsize=12)
-    ax2.legend(fontsize=12)
-    return fig
-
-
-def test_fixation_time(fgm_args : dict, ns: list[int], distance_limit : float= 0.01, nb_tests : int = 10) -> None:
-    used_args = fgm_args.copy()
-    used_args["display_fixation"] = False
-    try:
-        used_args.pop('n')
-    except:
-        pass
-
-
-    nb_genes = np.zeros(shape = (len(ns), nb_tests))
-    fixation_times = np.zeros(shape = (len(ns), nb_tests))
-
-    print("Starting test of fixation time for different dimensions")
-    for i,n in enumerate(ns):
-        for j in range(nb_tests):
-            fgm = FisherGeometricModel(n, **used_args)
-            fgm.evolve_until_distance(distance_limit = distance_limit)
-            nb_genes[i,j] = len(fgm.genes)
-            fixation_times[i,j] = fgm.current_time
-        print(f"Dimension {n} done!")
-
-    fig = plt.figure(figsize= (10,4))
-    ax = plt.subplot()
-    ax.set_xlabel("Number of dimensions", fontsize=14)
-    ax.set_ylabel("Time until fixation", fontsize=14)
-    ax.grid()
-    ax.tick_params(axis='both', which='major', labelsize=12)
-
-
-
-    X = np.tile(ns, (nb_tests,1))
-
-    cmap = plt.cm.viridis
-    scatter = ax.scatter(X.flatten(), fixation_times.flatten(), c = nb_genes.flatten(), cmap = cmap, linewidths= 5)
-    cbar = fig.colorbar(scatter, ax=ax)
-    cbar.ax.tick_params(labelsize=12)
-    cbar.set_label('Number of genes at fixation', fontsize=14)
-
-    fig.savefig("Figures/fixation_time")
-    # print(nb_genes)
-    return fig
-
-
 def draw_phenotype_size(fgm : FisherGeometricModel):
     fig = plt.figure(figsize = (10,4))
     ax = plt.subplot()
@@ -210,33 +111,6 @@ def draw_distance_plot(fgms: list[FisherGeometricModel], with_analytical = False
     fig.tight_layout()
     fig.savefig("Figures/distance_to_optimum")
     return fig
-
-def test_deletion_probabilities(fgm_args : dict, nb_tests : int = 100, distance_limit : float = 0.01):
-    used_args = fgm_args.copy()
-    if input("Do you want to generate new data for the deletion tests? (leave empty if no)"):
-        used_args["display_fixation"] = False
-        deletions = np.zeros(nb_tests)
-        deletion_index = used_args["mutation_methods"].index("deletion")
-        for i in range(nb_tests):
-            fgm = FisherGeometricModel(**used_args)
-            fgm.evolve_until_distance(distance_limit)
-            deletions[i] = sum(fgm.methods[:,deletion_index])
-            print(f"\rDeletion tests {100*(i+1)/nb_tests :.0f}% done!", end = '')
-        with open("deletion_data", "wb") as file:
-            pickle.dump(deletions,file,pickle.HIGHEST_PROTOCOL)
-    else:
-        with open("deletion_data", "rb") as file:
-            deletions = pickle.load(file)
-    
-    fig = plt.figure(figsize= (10,4))
-    ax = fig.subplots()
-    # ax.grid()
-    ax.tick_params(axis='both', which='major', labelsize=12)
-
-    ax.set_xlabel("Deletions", fontsize=14)
-    ax.set_ylabel("Frequency", fontsize=14)
-    ax.hist(deletions, color = 'r', ec='k')
-    fig.savefig(f"Figures/deletion_histogram_n_{used_args['n']}")
 
 def compare_runs_with_reset(fgm_args: dict, reset_points: list[int], total_generations: int, nb_runs: int = 100):
     """
@@ -316,16 +190,15 @@ def compare_runs_with_reset(fgm_args: dict, reset_points: list[int], total_gener
     return fig
 
 def show_simulation_results(fgm : FisherGeometricModel):
-    # print(f"Number of genes in time: {fgm.nb_genes}")
+    # print(f"Number of genes in time: {fgm.get_nb_genes()}")
     # print(fgm.methods)
     print(f"Number of {fgm.get_args()['mutation_methods']} = {np.sum(fgm.methods,axis = 0)}")
-    print(f"Number of genes: {np.unique(fgm.nb_genes, return_counts=True)}")
+    print(f"Number of genes: {np.unique(fgm.get_nb_genes(), return_counts=True)}")
     # gene_sizes = np.linalg.norm(fgm.genes, axis = 1)
     # print(f"Size of genes: {np.sort(gene_sizes)}")
     print(f"Inital beneficial directions: {fgm.initial_beneficial_directions}")
     # print(f"Genes : {fgm.genes}")
     # print(f"Initial position: {fgm.init_pos}")
-    draw_gene_size([fgm])
     plot_vizualised_path(fgm)
     # # draw_gene_trait_graph(fgm)
     draw_distance_plot([fgm])
@@ -367,7 +240,7 @@ def test_analytical_vs_numerical(fgm_args: dict, num_runs: int = 100, time_steps
             fgm = FisherGeometricModel(**used_args)
             fgm.evolve_successive(time_steps)
             numerical_distances[run] = np.linalg.norm(fgm.positions, axis=1)
-            numerical_nb_genes[run] = fgm.nb_genes
+            numerical_nb_genes[run] = fgm.get_nb_genes()
             print(f"Run {run + 1}/{num_runs} completed", end="\r")
         
         used_args["with_duplication"] = with_duplication
@@ -396,7 +269,7 @@ def test_analytical_vs_numerical(fgm_args: dict, num_runs: int = 100, time_steps
         ax1.set_xlabel("Time", fontsize=14)
         ax1.set_ylabel("Distance to the optimum", fontsize=14)
         ax1.set_yscale("log")
-        ax1.set_xscale("log")
+        # ax1.set_xscale("log")
         ax1.legend(fontsize=12)
         ax1.grid()
         ax1.tick_params(axis='both', which='major', labelsize=12)
@@ -525,9 +398,9 @@ def compare_analytical_numerical_heatmap(fgm_args: dict, n_values: list[int], di
     cbar = heatmap.collections[0].colorbar
     cbar.set_label('Difference', fontsize=20)
     cbar.ax.tick_params(labelsize=16)
-    ax1.set_xticks(np.arange(len(distance_values)) + 0.5)
+    ax1.set_xticks(np.arange(len(distance_values)) + 0.5, rotation = 45)
     ax1.set_xticklabels(distance_values)
-    ax1.set_yticks(np.arange(len(n_values)) + 0.5)
+    ax1.set_yticks(np.arange(len(n_values)) + 0.5, rotation = 0)
     ax1.set_yticklabels(n_values)
     ax1.invert_yaxis()
     ax1.set_xlabel('Initial Distance to Optimum', fontsize=20)
@@ -539,9 +412,9 @@ def compare_analytical_numerical_heatmap(fgm_args: dict, n_values: list[int], di
     cbar = heatmap.collections[0].colorbar
     cbar.set_label('Normalized Difference', fontsize=20)
     cbar.ax.tick_params(labelsize=16)
-    ax2.set_xticks(np.arange(len(distance_values)) + 0.5)
+    ax2.set_xticks(np.arange(len(distance_values)) + 0.5, rotation = 45)
     ax2.set_xticklabels(distance_values)
-    ax2.set_yticks(np.arange(len(n_values)) + 0.5)
+    ax2.set_yticks(np.arange(len(n_values)) + 0.5, rotation = 0)
     ax2.set_yticklabels(n_values)
     ax2.invert_yaxis()
     ax2.set_xlabel('Initial Distance to Optimum', fontsize=20)
@@ -588,7 +461,7 @@ def show_duplication_events(fgm_args: dict, num_runs: int = 100, time_steps: int
         for run in range(num_runs):
             fgm = FisherGeometricModel(**used_args)
             fgm.evolve_successive(time_steps)
-            for event in fgm.duplication_events:
+            for event in fgm.mutation_events["duplication"]:
                 if event['fixed']:
                     gene_sizes.append(np.linalg.norm(event["gene"]))
                     distances.append(np.linalg.norm([event["pos"]]))
@@ -630,60 +503,6 @@ def show_duplication_events(fgm_args: dict, num_runs: int = 100, time_steps: int
     ax.set_zlabel('Duplication Events', fontsize=14)
 
     fig.savefig("Figures/duplication_events")
-    return fig
-
-def show_deletion_events(fgm_args: dict, num_runs: int = 100, time_steps: int = 1000):
-    """
-    Compare the analytical probability of duplication with actual duplication events during simulation.
-    
-    Parameters:
-    - fgm_args: dict, arguments for initializing the FisherGeometricModel
-    - num_runs: int, number of numerical simulations to run
-    - time_steps: int, number of time steps for the simulation
-    - save_file: str, filename to save/load the simulation data
-    
-    Returns:
-    - fig: matplotlib figure, the 3D histogram plot
-    """
-    savefile = "test_data/deletion_events.pkl"
-    used_args = fgm_args.copy()
-    n = used_args['n']
-    if os.path.exists(savefile):
-        distances, used_args = load_simulation_data(savefile)
-    else:
-        
-        used_args['display_fixation'] = False
-
-        distances = []
-
-        for run in range(num_runs):
-            fgm = FisherGeometricModel(**used_args)
-            fgm.evolve_successive(time_steps)
-            for event in fgm.deletion_events:
-                if event['fixed']:
-                    distances.append(np.linalg.norm([event["pos"]]))
-
-            print(f"Deletion event run {run + 1}/{num_runs} completed", end="\r")
-
-        distances = np.array(distances)
-        used_args["num_runs"] = num_runs
-        used_args["time_steps"] = time_steps
-        save_simulation_data(savefile, (distances, used_args))
-
-    # Create a 3D histogram
-    fig = plt.figure(figsize=(10, 8))
-    ax = fig.subplots()
-
-    hist = plt.hist(distances, bins=30)
-
-    ax.set_xlabel('Distance to Optimum', fontsize=14)
-    ax.set_ylabel('Deletion Events', fontsize=14)
-    ax.grid()
-    ax.tick_params(axis='both', which='major', labelsize=12)
-
-
-    fig.savefig("Figures/deletion_events")
-    print(f"Model arguments for deletion events plot: {used_args}")
     return fig
 
 def compare_genome_size_no_duplications(fgm_args: dict, genome_sizes: list[int], num_runs: int = 100, time_steps: int = 1000):
@@ -769,7 +588,7 @@ def compare_duplication_attempts(fgm_args: dict, num_runs: int = 100, time_steps
         for run in range(num_runs):
             fgm = FisherGeometricModel(**used_args)
             fgm.evolve_successive(time_steps)
-            for event in fgm.duplication_events:
+            for event in fgm.mutation_events["duolication"]:
                 r = np.linalg.norm(event["gene"])
                 d = np.linalg.norm(event["pos"]-event["gene"])
                 r_d_ratio = r / d
@@ -838,6 +657,7 @@ def compare_duplication_heatmap(fgm_args: dict, n_values: list[int], num_runs: i
     else:
         used_args['display_fixation'] = False
         used_args['mutation_methods'] = ['addition','duplication']
+        used_args['save_unfixed_mutations'] = True
         r_values = np.linspace(0, 2/3, 30)
         observed_heatmap = np.zeros((len(n_values), len(r_values)))
         analytical_heatmap = np.zeros((len(n_values), len(r_values)))
@@ -851,7 +671,7 @@ def compare_duplication_heatmap(fgm_args: dict, n_values: list[int], num_runs: i
                 used_args['n'] = n
                 fgm = FisherGeometricModel(**used_args)
                 fgm.evolve_successive(generations)
-                for event in fgm.duplication_events:
+                for event in fgm.mutation_events["duplication"]:
                     r = np.linalg.norm(event["gene"])
                     d = np.linalg.norm(event["pos"]-event["gene"])
                     r_d_ratio = r / d
@@ -888,7 +708,7 @@ def compare_duplication_heatmap(fgm_args: dict, n_values: list[int], num_runs: i
     axes['A'].set_xticks(np.arange(len(ticks))*5 + 0.5)
     axes['A'].set_xticklabels(np.round(ticks, 2), rotation=45)
     axes['A'].set_yticks(np.arange(len(n_values)) + 0.5)
-    axes['A'].set_yticklabels(n_values)
+    axes['A'].set_yticklabels(n_values, rotation = 0)
     axes['A'].invert_yaxis()
     axes['A'].set_xlabel('r/d Values', fontsize=14)
     axes['A'].set_ylabel('n Values', fontsize=14)
@@ -902,7 +722,7 @@ def compare_duplication_heatmap(fgm_args: dict, n_values: list[int], num_runs: i
     axes['B'].set_xticks(np.arange(len(ticks))*5 + 0.5)
     axes['B'].set_xticklabels(np.round(ticks, 2), rotation=45)
     axes['B'].set_yticks(np.arange(len(n_values)) + 0.5)
-    axes['B'].set_yticklabels(n_values)
+    axes['B'].set_yticklabels(n_values, rotation = 0)
     axes['B'].invert_yaxis()
     axes['B'].set_xlabel('r/d Values', fontsize=14)
     axes['B'].set_ylabel('n Values', fontsize=14)
@@ -918,7 +738,7 @@ def compare_duplication_heatmap(fgm_args: dict, n_values: list[int], num_runs: i
     axes['C'].set_xticks(np.arange(len(ticks))*5 + 0.5)
     axes['C'].set_xticklabels(np.round(ticks, 2), rotation=45)
     axes['C'].set_yticks(np.arange(len(n_values)) + 0.5)
-    axes['C'].set_yticklabels(n_values)
+    axes['C'].set_yticklabels(n_values, rotation = 0)
     axes['C'].invert_yaxis()
     axes['C'].set_xlabel('r/d Values', fontsize=14)
     axes['C'].set_ylabel('n Values', fontsize=14)
@@ -928,7 +748,89 @@ def compare_duplication_heatmap(fgm_args: dict, n_values: list[int], num_runs: i
     print(f"Model arguments for duplication heatmap plot: {used_args}")
     return fig
 
-def test_mean_simulation_results(fgm_args: dict, n_values: list[int], mutation_methods: list[list[str]], num_runs: int = 100, time_steps: int = 1000):
+def observed_deletion_heatmap(fgm_args: dict, n_values: list[int], num_runs: int = 100, generations : int = 10000):
+    """
+    Generate a heatmap showing the proportions of beneficial observed deletion for a range of n values,
+    and compare it with the heatmap of analytical expectations.
+    
+    Parameters:
+    - fgm_args: dict, arguments for initializing the FisherGeometricModel
+    - n_values: list[int], list of different values for the dimension n
+    - num_runs: int, number of numerical simulations to run for each n value
+    - time_steps: int, number of time steps for the simulation
+    - save_file: str, filename to save/load the simulation data
+    
+    Returns:
+    - fig: matplotlib figure, the heatmap plot
+    """
+    savefile : str = "test_data/deletion_heatmap_data.pkl"
+    used_args = fgm_args.copy()
+    if os.path.exists(savefile):
+        used_args, observed_heatmap = load_simulation_data(savefile)
+    else:
+        used_args['display_fixation'] = False
+        used_args['mutation_methods'] = ['addition','duplication', 'deletion']
+        used_args["save_unfixed_mutations"] = True
+
+        r_values = np.linspace(0, 1, 30)
+        observed_heatmap = np.zeros((len(n_values), len(r_values)))
+
+        for i, n in enumerate(n_values):
+            r_d_ratios = []
+            success_counts = []
+            attempt_counts = []
+
+            for run in range(num_runs):
+                used_args['n'] = n
+                fgm = FisherGeometricModel(**used_args)
+                fgm.evolve_successive(generations)
+                for event in fgm.mutation_events["deletion"]:
+                    r = np.linalg.norm(event["gene"])
+                    d = np.linalg.norm(event["pos"]-event["gene"])
+                    r_d_ratio = r / d
+                    r_d_ratios.append(r_d_ratio)
+                    attempt_counts.append(1)
+                    success_counts.append(1 if event['fixed'] else 0)
+                print(f"Observed deletions: run {run + 1}/{num_runs} for n={n} completed", end="\r")
+
+            r_d_ratios = np.array(r_d_ratios)
+            success_counts = np.array(success_counts)
+            attempt_counts = np.array(attempt_counts)
+
+            # Group by r/d ratios
+            bin_indices = np.digitize(r_d_ratios, r_values)
+            for j in range(1, len(r_values)):
+                bin_mask = bin_indices == j
+                if np.sum(bin_mask) > 0:
+                    observed_heatmap[i, j - 1] = np.sum(success_counts[bin_mask]) / np.sum(attempt_counts[bin_mask])
+        used_args["n_values"] = n_values
+        used_args["r_values"] = r_values
+        save_simulation_data(savefile, (used_args, observed_heatmap))
+
+    n_values = used_args['n_values']
+    r_values = used_args['r_values']
+    
+    # Plotting the heatmap
+    fig, ax = plt.subplots(figsize=(16, 9))
+    ticks = r_values[::5]
+
+    heatmap_A = sns.heatmap(observed_heatmap, ax=ax, cmap='viridis', cbar = True)
+    cbar_A = heatmap_A.collections[0].colorbar
+    cbar_A.set_label('Observed Proportion', fontsize=14)
+    cbar_A.ax.tick_params(labelsize=12)
+    ax.set_xticks(np.arange(len(ticks))*5 + 0.5)
+    ax.set_xticklabels(np.round(ticks, 2), rotation=45)
+    ax.set_yticks(np.arange(len(n_values)) + 0.5)
+    ax.set_yticklabels(n_values, rotation = 0)
+    ax.invert_yaxis()
+    ax.set_xlabel('r/d Values', fontsize=14)
+    ax.set_ylabel('n Values', fontsize=14)
+
+    fig.savefig("Figures/deletion_observed_proportion_heatmap")
+    print(f"Model arguments for deletion heatmap plot: {used_args}")
+    return fig
+
+def test_mean_simulation_results(fgm_args: dict, n_values: list[int] = [10,50,100], mutation_methods: list[list[str]] = None, num_runs: int = 100, time_steps: int = 1000):
     """
     Test the mean simulation results for the GFGM with different mutation methods and values of n.
     
@@ -952,13 +854,22 @@ def test_mean_simulation_results(fgm_args: dict, n_values: list[int], mutation_m
     """
 
     if os.path.exists("test_data/mean_simulation_results.pkl"):
-        used_args, all_runs = load_simulation_data("test_data/mean_simulation_results.pkl")
+        used_args, all_distances, fixed_mutation_events, all_genome_ranges = load_simulation_data("test_data/mean_simulation_results.pkl")
     else:
+        if mutation_methods == None:
+            mutation_methods = [
+                                ["addition", "duplication", "deletion"],
+                                ["addition", "duplication"],
+                                ["addition"]]
+
         used_args = fgm_args.copy()
         used_args["display_fixation"] = False
 
 
-        all_runs = np.zeros((len(n_values), len(mutation_methods), num_runs, time_steps+2))
+        all_distances = np.zeros((len(n_values), len(mutation_methods), num_runs, time_steps+2))
+        all_genome_ranges = np.zeros((len(n_values), len(mutation_methods), num_runs, time_steps+2))
+        fixed_mutation_events = dict()
+
         for i, n in enumerate(n_values):
             for j, methods in enumerate(mutation_methods):
                 used_args['n'] = n
@@ -967,63 +878,125 @@ def test_mean_simulation_results(fgm_args: dict, n_values: list[int], mutation_m
                 for run in range(num_runs):
                     fgm = FisherGeometricModel(**used_args)
                     fgm.evolve_successive(time_steps)
-                    all_runs[i, j, run] = np.linalg.norm(fgm.positions, axis=1)
+                    all_distances[i, j, run] = np.linalg.norm(fgm.positions, axis=1)
+                    all_genome_ranges[i, j, run] = fgm.total_genome_range
+                    fixed_mutation_events[(i, j, run)] = { event_name : [event for event in events if event["fixed"]] for event_name, events in fgm.mutation_events.items()}
                     print(f"Run {run + 1}/{num_runs} for n={n}, methods={methods} completed", end="\033[K\r")
 
-        
+
+        used_args["num_runs"] = num_runs
         used_args["time_steps"] = time_steps
         used_args["n_values"] = n_values
         used_args["mutation_methods"] = mutation_methods
-        save_simulation_data("test_data/mean_simulation_results.pkl", (used_args, all_runs))
-    
+        save_simulation_data("test_data/mean_simulation_results.pkl", (used_args, all_distances, fixed_mutation_events, all_genome_ranges))
+
+    #Plotting data
     time_steps = used_args["time_steps"]
     x = np.arange(time_steps+2)
 
-    fig, ax = plt.subplots(figsize=(6, 6))
-    linetypes = ['-', '--', '-.']
-    colors = ['b', 'r', 'g']
+    fig, axes = plt.subplot_mosaic("a;a;a;b;c;d;e;e;e",figsize=(6, 11))
+    # axes["C"].yaxis.set_ticklabels([])
+    # axes["D"].yaxis.set_ticklabels([])
 
-    percentiles = [10, 90]
-    for i, n in enumerate(used_args["n_values"]):
-        for j, methods in enumerate(used_args["mutation_methods"]):
-            lower = np.percentile(all_runs[i, j], percentiles[0], axis=0)
-            upper = np.percentile(all_runs[i, j], percentiles[1], axis=0)
-            mean = np.mean(all_runs[i, j], axis=0)
-            ax.plot(x, mean, label=f"Mean Distance (n={n}, methods={methods})", linestyle=linetypes[i], c = colors[j])
-            ax.fill_between(x, lower, upper, alpha=0.1, color = colors[j])
+    linetypes = ['-.','--', '-']
+    colors = ['g', 'r', 'b']
+    percentiles = [20, 80]
 
-    
     color_handles = [Line2D([0], [0], color=color, lw=2) for color in colors]
     line_handles = [Line2D([0], [0], color='black', lw=2, linestyle=line) for line in linetypes]
-
-    color_labels = ['Only Point', 'Point and Duplications', 'Point, Duplications and Deletions']
-
+    color_labels = ['Point, Duplications and Deletions', 'Point and Duplications', 'Only Point']
     line_labels = used_args["n_values"]
+    log_y = True
+    log_x = True
 
-    log = True
-    if log:
+    if log_y and log_x:
+        location = 'lower left'
+        anchor1 = (0,0)
+        anchor2 = (0, 0.3)  
+    else:
         location = 'upper right'
         anchor1 = (1,1)
         anchor2 = (1, 0.8)
-        ax.set_yscale('log')
-        # ax.set_xscale("log")
-    else:
-        location = 'lower left'
-        anchor1 = (0,0)
-        anchor2 = (0, 0.2)    
+    for i, ax in axes.items():
+        if log_x:
+            ax.set_xscale("log")
+    axes['a'].set_yscale("log")
+
+    def plot_distances(ax : plt.Axes):
+        for i, n in enumerate(used_args["n_values"]):
+            for j, methods in enumerate(used_args["mutation_methods"]):
+                lower = np.percentile(all_distances[i, j], percentiles[0], axis=0)
+                upper = np.percentile(all_distances[i, j], percentiles[1], axis=0)
+                mean = np.mean(all_distances[i, j], axis=0)
+                ax.plot(x, mean, label=f"Mean Distance (n={n}, methods={methods})", linestyle=linetypes[i], c = colors[j])
+                ax.fill_between(x, lower, upper, alpha=0.3, color = colors[j])
+        
+        legend1 = ax.legend(color_handles, color_labels, title="Mutation Type", loc=location, bbox_to_anchor=anchor1, fontsize=9)
+        legend2 = ax.legend(line_handles, line_labels, title="Dimension", loc=location, bbox_to_anchor=anchor2, fontsize = 9)
+
+        ax.add_artist(legend1) # Add the customed legend
+
+
+        # ax.set_xlabel("Time", fontsize=12)
+        ax.set_ylabel("Distance to the Optimum", fontsize=12)
+        
+        ax.grid()
+        ax.tick_params(axis='both', which='major', labelsize=10)
+        return ax
+
+    def plot_mutation_events(ax : plt.Axes, method : str):
+        for i, n in enumerate(used_args["n_values"]):
+            for j, methods in enumerate(used_args["mutation_methods"]):
+                if method not in methods:
+                    continue
+                all_fix_times = np.zeros((num_runs, time_steps+2))
+                for run in range(num_runs):
+                    fixed_mutation_times = [event["time"] for event in fixed_mutation_events[(i, j, run)][method] if event["fixed"]]
+                    all_fix_times[run, fixed_mutation_times] = 1
+                cumsum = np.cumsum(all_fix_times, axis=1)
+            
+                upper = np.percentile(cumsum, percentiles[1], axis=0)
+                mean = np.mean(cumsum, axis=0)
+                lower = np.percentile(cumsum, percentiles[0], axis=0)
+
+                ax.plot(x, mean, linestyle=linetypes[i], c = colors[j])
+                # ax.fill_between(x, lower, upper, alpha=0.3, color = colors[j])
+        ax.grid()
+
+        return ax
     
-    legend1 = ax.legend(color_handles, color_labels, title="Mutation Type", loc=location, bbox_to_anchor=anchor1, fontsize=10)
-    legend2 = ax.legend(line_handles, line_labels, title="Dimension", loc=location, bbox_to_anchor=anchor2, fontsize = 10)
+    def plot_mean_gene_size(ax : plt.Axes):
+        for i, n in enumerate(used_args["n_values"]):
+            for j, methods in enumerate(used_args["mutation_methods"]):
+                gene_ranges = all_genome_ranges[i, j] / used_args["initial_distance"]
 
-    ax.add_artist(legend1) # Add the customed legend
+                # lower = np.percentile(gene_sizes, percentiles[0], axis=0)
+                # upper = np.percentile(gene_sizes, percentiles[1], axis=0)
+                mean = np.mean(gene_ranges, axis = 0)
+                ax.plot(x, mean, linestyle=linetypes[i], c = colors[j])
+                # ax.fill_between(x, lower, upper, alpha=0.3, color = colors[j])
 
-
-    ax.set_xlabel("Time", fontsize=12)
-    ax.set_ylabel("Distance to the Optimum", fontsize=12)
+        ax.set_xlabel("Time", fontsize=12)
+        ax.set_ylabel("Normalized Gene Size", fontsize=12)
+        
+        ax.grid()
+        ax.tick_params(axis='both', which='major', labelsize=10)
+        return ax
     
-    ax.grid()
-    ax.tick_params(axis='both', which='major', labelsize=10)
-
+    
+    plot_distances(axes["a"])
+    axes["a"].text(0.1, 0.9, 'a)', transform=axes["a"].transAxes, fontsize=16, va='top', bbox=dict(facecolor='0.7', edgecolor='none', pad=3.0))
+    for method, i in zip(["addition", "duplication", "deletion"], "bcd"):
+        plot_mutation_events(axes[i], method)
+        axes[i].text(0.1, 0.9, f'{i})', transform=axes[i].transAxes, fontsize=16, va='top', bbox=dict(facecolor='0.7', edgecolor='none', pad=3.0))
+    axes['b'].set_ylabel("Point mutations", fontsize=12)
+    axes['c'].set_ylabel("Duplications", fontsize=12)
+    axes['d'].set_ylabel("Deletions", fontsize=12)
+    plot_mean_gene_size(axes['e'])
+    axes['e'].text(0.1, 0.9, 'e)', transform=axes['e'].transAxes, fontsize=16, va='top', bbox=dict(facecolor='0.7', edgecolor='none', pad=3.0))
+    
+    # plot_mean_gene_size(axes["e"])
+    fig.tight_layout()
     fig.savefig("Figures/mean_simulation_results")
     return fig
 
@@ -1085,6 +1058,25 @@ def find_fixed_mutations(fgm_args: dict, nb_runs: int = 100, time_steps: int = 1
     fig.savefig("Figures/fixed_mutation_events")
     return fig
 
+def test_test(fgm: FisherGeometricModel):
+    time_steps = fgm.current_time
+    x = np.arange(time_steps)
+    fig, ax = plt.subplots()
+
+    nb_genes = fgm.get_nb_genes()
+    fixed_mutation_times = [event["time"] for event in fgm.mutation_events["addition"] if event["fixed"]]
+
+    all_fix_times = np.zeros(time_steps)
+    all_fix_times[fixed_mutation_times] = 1
+    weighted_fix_times = all_fix_times*nb_genes
+    cumsum = np.cumsum(all_fix_times)
+    weighted_cumsum = np.cumsum(weighted_fix_times)
+
+    plt.plot(x, cumsum, label = "Fixed Event Generations")
+    plt.plot(x, weighted_cumsum, label = "Weighted Fixed Events")
+    plt.legend()
+    plt.grid()
+
 if __name__ == "__main__":
     #To create new data for the tests, remove the relevant test data files in test_data folder
 
@@ -1093,7 +1085,7 @@ if __name__ == "__main__":
 
     with open("Parameters.json", 'rb') as file:
         fgm_args : dict = json.load(file)
-    # test_fixation_time(fgm_args, ns = range(2,103,5), nb_tests = 10, distance_limit = 1)
+
     # show_simulation_results(fgm)
 
 
@@ -1102,7 +1094,7 @@ if __name__ == "__main__":
 
     # test_deletion_probabilities(fgm_args)
 
-    test_analytical_vs_numerical(fgm_args, num_runs=100, time_steps=10000)
+    # test_analytical_vs_numerical(fgm_args, num_runs=100, time_steps=10000)
     
     # n_values = [3,10, 20, 50, 100]
     # distance_values = [10, 20, 50, 100]
@@ -1114,16 +1106,14 @@ if __name__ == "__main__":
     # compare_genome_size_no_duplications(fgm_args, genome_sizes, num_runs=100, time_steps=10000)
     
     # compare_duplication_attempts(fgm_args, num_runs=1000, time_steps=1000)
-    
-    # show_deletion_events(fgm_args, num_runs=100, time_steps=10000)
-    
+        
     # n_values = [3, 10, 20, 50, 100]
     # compare_duplication_heatmap(fgm_args, n_values, num_runs=500, generations=10000)
 
-    # n_values = [10, 50, 100]
-    # mutation_methods = [["addition"], ["addition", "duplication"], ["addition", "duplication", "deletion"]]
-    # test_mean_simulation_results(fgm_args, n_values, mutation_methods, num_runs=100, time_steps=10000)
+    test_mean_simulation_results(fgm_args, n_values = [100,50,10], num_runs=100, time_steps=100000)
 
-    find_fixed_mutations(fgm_args, nb_runs=100, time_steps=1000)
+    # find_fixed_mutations(fgm_args, nb_runs=100, time_steps=1000)
 
-    plt.show()
+    # observed_deletion_heatmap(fgm_args, n_values=[3, 10, 20, 50, 100], num_runs=100, generations=10000)
+    # test_test(fgm)
+    # plt.show()
